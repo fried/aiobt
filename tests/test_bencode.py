@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import pytest
+import later.unittest
 
 from aiobt.bencode import (
     BencodeError,
@@ -19,41 +19,41 @@ from aiobt.bencode import (
 # ===================================================================
 
 
-class TestDecodeInt:
+class TestDecodeInt(later.unittest.TestCase):
     def test_zero(self) -> None:
-        assert decode(b"i0e") == 0
+        self.assertEqual(decode(b"i0e"), 0)
 
     def test_positive(self) -> None:
-        assert decode(b"i42e") == 42
+        self.assertEqual(decode(b"i42e"), 42)
 
     def test_negative(self) -> None:
-        assert decode(b"i-7e") == -7
+        self.assertEqual(decode(b"i-7e"), -7)
 
     def test_large(self) -> None:
-        assert decode(b"i9999999999999e") == 9999999999999
+        self.assertEqual(decode(b"i9999999999999e"), 9999999999999)
 
     def test_negative_zero_rejected(self) -> None:
-        with pytest.raises(DecodeError, match="negative zero"):
+        with self.assertRaisesRegex(DecodeError, "negative zero"):
             decode(b"i-0e")
 
     def test_leading_zero_rejected(self) -> None:
-        with pytest.raises(DecodeError, match="leading zero"):
+        with self.assertRaisesRegex(DecodeError, "leading zero"):
             decode(b"i03e")
 
     def test_empty_integer_rejected(self) -> None:
-        with pytest.raises(DecodeError):
+        with self.assertRaises(DecodeError):
             decode(b"ie")
 
 
-class TestEncodeInt:
+class TestEncodeInt(later.unittest.TestCase):
     def test_zero(self) -> None:
-        assert encode(0) == b"i0e"
+        self.assertEqual(encode(0), b"i0e")
 
     def test_positive(self) -> None:
-        assert encode(42) == b"i42e"
+        self.assertEqual(encode(42), b"i42e")
 
     def test_negative(self) -> None:
-        assert encode(-7) == b"i-7e"
+        self.assertEqual(encode(-7), b"i-7e")
 
 
 # ===================================================================
@@ -61,34 +61,34 @@ class TestEncodeInt:
 # ===================================================================
 
 
-class TestDecodeBytes:
+class TestDecodeBytes(later.unittest.TestCase):
     def test_empty(self) -> None:
-        assert decode(b"0:") == b""
+        self.assertEqual(decode(b"0:"), b"")
 
     def test_simple(self) -> None:
-        assert decode(b"4:spam") == b"spam"
+        self.assertEqual(decode(b"4:spam"), b"spam")
 
     def test_binary(self) -> None:
-        assert decode(b"3:\x00\x01\x02") == b"\x00\x01\x02"
+        self.assertEqual(decode(b"3:\x00\x01\x02"), b"\x00\x01\x02")
 
     def test_length_mismatch(self) -> None:
-        with pytest.raises(DecodeError, match="extends past"):
+        with self.assertRaisesRegex(DecodeError, "extends past"):
             decode(b"10:short")
 
     def test_leading_zero_length_rejected(self) -> None:
-        with pytest.raises(DecodeError, match="leading zero"):
+        with self.assertRaisesRegex(DecodeError, "leading zero"):
             decode(b"04:spam")
 
 
-class TestEncodeBytes:
+class TestEncodeBytes(later.unittest.TestCase):
     def test_empty(self) -> None:
-        assert encode(b"") == b"0:"
+        self.assertEqual(encode(b""), b"0:")
 
     def test_simple(self) -> None:
-        assert encode(b"spam") == b"4:spam"
+        self.assertEqual(encode(b"spam"), b"4:spam")
 
     def test_binary(self) -> None:
-        assert encode(b"\xff\x00") == b"2:\xff\x00"
+        self.assertEqual(encode(b"\xff\x00"), b"2:\xff\x00")
 
 
 # ===================================================================
@@ -96,33 +96,33 @@ class TestEncodeBytes:
 # ===================================================================
 
 
-class TestDecodeList:
+class TestDecodeList(later.unittest.TestCase):
     def test_empty(self) -> None:
-        assert decode(b"le") == []
+        self.assertEqual(decode(b"le"), [])
 
     def test_ints(self) -> None:
-        assert decode(b"li1ei2ei3ee") == [1, 2, 3]
+        self.assertEqual(decode(b"li1ei2ei3ee"), [1, 2, 3])
 
     def test_mixed(self) -> None:
-        assert decode(b"li42e4:spame") == [42, b"spam"]
+        self.assertEqual(decode(b"li42e4:spame"), [42, b"spam"])
 
     def test_nested(self) -> None:
-        assert decode(b"lli1eeli2eee") == [[1], [2]]
+        self.assertEqual(decode(b"lli1eeli2eee"), [[1], [2]])
 
     def test_unterminated(self) -> None:
-        with pytest.raises(DecodeError, match="unterminated"):
+        with self.assertRaisesRegex(DecodeError, "unterminated"):
             decode(b"li1e")
 
 
-class TestEncodeList:
+class TestEncodeList(later.unittest.TestCase):
     def test_empty(self) -> None:
-        assert encode([]) == b"le"
+        self.assertEqual(encode([]), b"le")
 
     def test_ints(self) -> None:
-        assert encode([1, 2, 3]) == b"li1ei2ei3ee"
+        self.assertEqual(encode([1, 2, 3]), b"li1ei2ei3ee")
 
     def test_nested(self) -> None:
-        assert encode([[1], [2]]) == b"lli1eeli2eee"
+        self.assertEqual(encode([[1], [2]]), b"lli1eeli2eee")
 
 
 # ===================================================================
@@ -130,43 +130,43 @@ class TestEncodeList:
 # ===================================================================
 
 
-class TestDecodeDict:
+class TestDecodeDict(later.unittest.TestCase):
     def test_empty(self) -> None:
-        assert decode(b"de") == {}
+        self.assertEqual(decode(b"de"), {})
 
     def test_simple(self) -> None:
-        assert decode(b"d3:cow3:moo4:spam4:eggse") == {
-            b"cow": b"moo",
-            b"spam": b"eggs",
-        }
+        self.assertEqual(
+            decode(b"d3:cow3:moo4:spam4:eggse"),
+            {b"cow": b"moo", b"spam": b"eggs"},
+        )
 
     def test_nested(self) -> None:
         result = decode(b"d4:dictd3:keyi42eee")
-        assert result == {b"dict": {b"key": 42}}
+        self.assertEqual(result, {b"dict": {b"key": 42}})
 
     def test_keys_must_be_sorted(self) -> None:
         # "z" comes after "a" — this should be valid
-        assert decode(b"d1:ai1e1:zi2ee") == {b"a": 1, b"z": 2}
+        self.assertEqual(decode(b"d1:ai1e1:zi2ee"), {b"a": 1, b"z": 2})
 
     def test_unsorted_keys_rejected(self) -> None:
-        with pytest.raises(DecodeError, match="out of order"):
+        with self.assertRaisesRegex(DecodeError, "out of order"):
             decode(b"d1:zi1e1:ai2ee")
 
     def test_duplicate_keys_rejected(self) -> None:
-        with pytest.raises(DecodeError, match="out of order"):
+        with self.assertRaisesRegex(DecodeError, "out of order"):
             decode(b"d1:ai1e1:ai2ee")
 
 
-class TestEncodeDict:
+class TestEncodeDict(later.unittest.TestCase):
     def test_empty(self) -> None:
-        assert encode({}) == b"de"
+        self.assertEqual(encode({}), b"de")
 
     def test_sorts_keys(self) -> None:
         result = encode({b"z": 1, b"a": 2})
-        assert result == b"d1:ai2e1:zi1ee"
+        self.assertEqual(result, b"d1:ai2e1:zi1ee")
 
     def test_non_bytes_key_rejected(self) -> None:
-        with pytest.raises(EncodeError, match="dict key must be bytes"):
+        with self.assertRaisesRegex(EncodeError, "dict key must be bytes"):
             encode({"string_key": 1})  # type: ignore[dict-item]
 
 
@@ -175,10 +175,9 @@ class TestEncodeDict:
 # ===================================================================
 
 
-class TestRoundTrip:
-    @pytest.mark.parametrize(
-        "value",
-        [
+class TestRoundTrip(later.unittest.TestCase):
+    def test_round_trip_values(self) -> None:
+        values = [
             0,
             -1,
             42,
@@ -189,10 +188,10 @@ class TestRoundTrip:
             {},
             {b"key": b"value"},
             {b"a": {b"b": [1, 2, 3]}},
-        ],
-    )
-    def test_round_trip(self, value: object) -> None:
-        assert decode(encode(value)) == value  # type: ignore[arg-type]
+        ]
+        for value in values:
+            with self.subTest(value=value):
+                self.assertEqual(decode(encode(value)), value)  # type: ignore[arg-type]
 
 
 # ===================================================================
@@ -200,23 +199,23 @@ class TestRoundTrip:
 # ===================================================================
 
 
-class TestEdgeCases:
+class TestEdgeCases(later.unittest.TestCase):
     def test_empty_data(self) -> None:
-        with pytest.raises(DecodeError, match="empty data"):
+        with self.assertRaisesRegex(DecodeError, "empty data"):
             decode(b"")
 
     def test_trailing_data(self) -> None:
-        with pytest.raises(DecodeError, match="trailing data"):
+        with self.assertRaisesRegex(DecodeError, "trailing data"):
             decode(b"i42ei0e")
 
     def test_decode_all(self) -> None:
         result = decode_all(b"i1ei2ei3e")
-        assert result == [1, 2, 3]
+        self.assertEqual(result, [1, 2, 3])
 
     def test_memoryview_input(self) -> None:
         data = memoryview(b"4:test")
-        assert decode(data) == b"test"
+        self.assertEqual(decode(data), b"test")
 
     def test_bytearray_input(self) -> None:
         data = bytearray(b"i99e")
-        assert decode(data) == 99
+        self.assertEqual(decode(data), 99)

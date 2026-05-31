@@ -33,8 +33,6 @@ dependencies = [
 dev = [
     "black",
     "pyrefly",
-    "pytest",
-    "pytest-asyncio",
     "later",
     "cython",
 ]
@@ -58,6 +56,3 @@ target-version = ["py314"]
 python_version = "3.14"
 source = ["src"]
 
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-asyncio_mode = "auto"
