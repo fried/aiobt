@@ -8,6 +8,7 @@ Pure Python asyncio BitTorrent client library.
 - **Zero bloat** — only runtime dependency is `attrs`
 - **Pluggable storage** — swap the filesystem backend for S3, databases, or anything else
 - **Compact mode** — store multi-file torrents as a single blob for distribution services
+- **LAN peer discovery** — BEP 26 Local Service Discovery via multicast, no tracker needed on local networks
 - **Cython-ready** — hot paths like bencode are structured for optional Cython compilation
 - **Modern Python** — requires 3.14+, uses `type` aliases, `match`, `TaskGroup`, frozen attrs classes
 - **Type-safe** — fully typed with `py.typed` marker, checked with pyrefly
@@ -77,6 +78,32 @@ class S3Storage:
         await self._bucket.close()
 ```
 
+## Local Peer Discovery (BEP 26)
+
+Find peers on the local network without a tracker — ideal for LAN
+parties, office setups, or air-gapped environments:
+
+```python
+import asyncio
+from aiobt import LocalDiscovery
+
+async def main() -> None:
+    async with LocalDiscovery(listen_port=6881) as lsd:
+        # Announce a torrent we're serving
+        lsd.announce(info_hash)
+
+        # Discover peers on the LAN
+        async for peer in lsd.discovered_peers():
+            print(f"LAN peer: {peer.host}:{peer.port}")
+            # connect and exchange pieces...
+
+asyncio.run(main())
+```
+
+`LocalDiscovery` uses IPv4 multicast (`239.192.152.143:6771`) with
+optional IPv6 support. It automatically filters out its own
+announcements via a per-instance cookie.
+
 ## Architecture
 
 ```
@@ -84,6 +111,7 @@ aiobt/
 ├── client.py       # BitTorrentClient async context manager
 ├── bencode.py      # Bencode codec (Cython-ready)
 ├── torrent.py      # Torrent metadata — frozen attrs models
+├── discovery.py    # Local Service Discovery — BEP 26 multicast
 ├── peer.py         # Peer connection management
 ├── tracker.py      # HTTP + UDP tracker announce
 ├── protocol.py     # BitTorrent wire protocol (BEP 3)
