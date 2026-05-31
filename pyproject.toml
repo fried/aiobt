@@ -1,0 +1,63 @@
+[build-system]
+requires = ["flit_core>=3.9,<4"]
+build-backend = "flit_core.buildapi"
+
+[project]
+name = "aiobt"
+version = "0.1.0"
+description = "Pure Python asyncio BitTorrent client library"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.14"
+authors = [
+    { name = "Jason Andrew Fried", email = "me@jasonfried.info" },
+]
+keywords = ["asyncio", "bittorrent", "torrent", "p2p", "peer-to-peer"]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Framework :: AsyncIO",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Internet",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Typing :: Typed",
+]
+dependencies = [
+    "attrs>=24.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "black",
+    "pyrefly",
+    "pytest",
+    "pytest-asyncio",
+    "later",
+    "cython",
+]
+
+[project.urls]
+Homepage = "https://github.com/fried/aiobt"
+Repository = "https://github.com/fried/aiobt"
+Issues = "https://github.com/fried/aiobt/issues"
+
+[tool.flit.module]
+name = "aiobt"
+
+[tool.flit.sdist]
+include = ["src/aiobt/py.typed"]
+
+[tool.black]
+line-length = 88
+target-version = ["py314"]
+
+[tool.pyrefly]
+python_version = "3.14"
+source = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
