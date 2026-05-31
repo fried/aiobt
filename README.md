@@ -131,7 +131,7 @@ cd aiobt
 pip install -e ".[dev]"
 
 # Run tests
-pytest
+python -m unittest discover tests
 
 # Format
 black src/ tests/
@@ -143,7 +143,31 @@ pyrefly check src/
 ## Optional Cython Compilation
 
 The `bencode` module can be compiled with Cython for ~10x faster
-torrent file parsing. See `cython/README.md` for instructions.
+torrent file parsing:
+
+```bash
+python build_cython.py
+```
+
+Verify it loaded:
+
+```python
+from aiobt import is_compiled, compilation_status
+print(compilation_status())  # {'bencode': True}
+```
+
+Both `.so` and `.py` are always shipped — Python prefers the compiled
+extension but falls back to pure Python automatically.
+
+See `cython/README.md` for details.
+
+## CI / CD
+
+- **CI** runs on every push and PR: black formatting, pyrefly type
+  checking, pure Python tests, and Cython compile + test.
+- **Release** on `v*` tags: builds sdist, pure Python wheel, and
+  platform-specific compiled wheels (Linux, macOS arm64/x86_64,
+  Windows), then publishes to PyPI via trusted publishing.
 
 ## License
 

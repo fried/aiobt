@@ -17,7 +17,6 @@ classifiers = [
     "Development Status :: 2 - Pre-Alpha",
     "Framework :: AsyncIO",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.14",
@@ -35,6 +34,8 @@ dev = [
     "pyrefly",
     "later",
     "cython",
+    "setuptools",
+    "wheel",
 ]
 
 [project.urls]
