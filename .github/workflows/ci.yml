@@ -37,7 +37,7 @@ jobs:
       - run: pyrefly check src/
 
   test:
-    name: Unit tests (Python ${{ matrix.python-version }})
+    name: Tests with Cython (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -52,11 +52,21 @@ jobs:
         run: pip install meson-python meson ninja cython>=3
       - name: Install package + test deps
         run: pip install -e ".[dev]" --no-build-isolation
+      - name: Verify Cython extensions loaded
+        run: |
+          python -c "
+          from aiobt._compiled import compilation_status
+          status = compilation_status()
+          print(status)
+          for mod, compiled in status.items():
+              assert compiled, f'{mod} should be compiled'
+          print('[OK] All Cython modules compiled and loadable')
+          "
       - name: Run tests
         run: python -m unittest discover tests
 
   test-pure-python:
-    name: Pure Python tests (no Cython)
+    name: Tests without Cython (pure Python fallback)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -64,10 +74,8 @@ jobs:
         with:
           python-version: "3.14"
           allow-prereleases: true
-      - name: Install without Cython compilation
-        run: |
-          pip install later
-          echo "Running from source — no .so files"
+      - name: Install runtime deps only
+        run: pip install later
       - name: Verify pure Python fallback
         run: |
           PYTHONPATH=src python -c "
@@ -80,29 +88,3 @@ jobs:
           "
       - name: Run tests
         run: PYTHONPATH=src python -m unittest discover tests
-
-  cython-build:
-    name: Cython compilation + tests
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.14"
-          allow-prereleases: true
-      - name: Install meson toolchain
-        run: pip install meson-python meson ninja cython>=3
-      - name: Install package with Cython
-        run: pip install -e ".[dev]" --no-build-isolation
-      - name: Verify all compiled modules loaded
-        run: |
-          python -c "
-          from aiobt._compiled import compilation_status
-          status = compilation_status()
-          print(status)
-          for mod, compiled in status.items():
-              assert compiled, f'{mod} should be compiled'
-          print('[OK] All Cython modules compiled and loadable')
-          "
-      - name: Run tests with compiled extensions
-        run: python -m unittest discover tests

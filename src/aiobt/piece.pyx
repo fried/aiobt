@@ -1,6 +1,7 @@
 # cython: language_level=3str
 # cython: boundscheck=False
 # cython: wraparound=False
+# cython: cdivision=True
 """Piece management, selection, and verification — Cython-optimized variant.
 
 This module has the **same public interface** as ``piece.py``.
@@ -52,9 +53,9 @@ class PieceTracker:
 
     def __init__(
         self,
-        piece_length: int,
-        total_length: int,
-        pieces_raw: bytes,
+        Py_ssize_t piece_length,
+        Py_ssize_t total_length,
+        bytes pieces_raw not None,
     ) -> None:
         cdef Py_ssize_t full
         cdef Py_ssize_t remainder
@@ -105,41 +106,41 @@ class PieceTracker:
         """Download progress as a fraction [0.0, 1.0]."""
         if self._piece_count == 0:
             return 1.0
-        return len(self._have) / <double>self._piece_count
+        return <double>len(self._have) / <double>self._piece_count
 
-    def spec(self, index: int):
+    def spec(self, int index):
         """Return the :class:`PieceSpec` for piece *index*."""
         return self._specs[index]
 
-    def mark_have(self, index: int) -> None:
+    def mark_have(self, int index) -> None:
         """Mark a piece as downloaded and verified."""
         self._have.add(index)
         self._pending.discard(index)
         self._failed.discard(index)
 
-    def mark_pending(self, index: int) -> None:
+    def mark_pending(self, int index) -> None:
         """Mark a piece as being downloaded."""
         self._pending.add(index)
 
-    def mark_failed(self, index: int) -> None:
+    def mark_failed(self, int index) -> None:
         """Mark a piece as failed verification."""
         self._pending.discard(index)
         self._failed.add(index)
 
-    def update_availability(self, peer_pieces) -> None:
+    def update_availability(self, set peer_pieces not None) -> None:
         """Update availability from a peer's bitfield."""
         cdef int idx
         cdef int current
-        avail = self._availability
+        cdef dict avail = self._availability
         for idx in peer_pieces:
             current = avail.get(idx, 0)
             avail[idx] = current + 1
 
-    def remove_availability(self, peer_pieces) -> None:
+    def remove_availability(self, set peer_pieces not None) -> None:
         """Decrement availability when a peer disconnects."""
         cdef int idx
         cdef int count
-        avail = self._availability
+        cdef dict avail = self._availability
         for idx in peer_pieces:
             count = avail.get(idx, 0)
             if count <= 1:
@@ -153,20 +154,20 @@ class PieceTracker:
         Returns ``None`` if all pieces are either have or pending.
         """
         cdef Py_ssize_t i
-        cdef Py_ssize_t pc = self._piece_count
-        cdef int best_avail
+        cdef int pc = self._piece_count
+        cdef int best_avail = 0
         cdef int avail_val
         cdef int best_idx = -1
 
-        have = self._have
-        pending = self._pending
-        avail = self._availability
+        cdef set have = self._have
+        cdef set pending = self._pending
+        cdef dict avail = self._availability
 
         # Single pass: find the candidate with lowest availability
         for i in range(pc):
             if i in have or i in pending:
                 continue
-            avail_val = avail.get(i, 0)
+            avail_val = <int>avail.get(i, 0)
             if best_idx == -1 or avail_val < best_avail:
                 best_avail = avail_val
                 best_idx = <int>i
@@ -176,7 +177,7 @@ class PieceTracker:
         return best_idx
 
     @staticmethod
-    def verify_piece(data: bytes, expected_hash: bytes) -> bool:
+    def verify_piece(bytes data not None, bytes expected_hash not None) -> bool:
         """Verify piece *data* against its expected SHA-1 *hash*."""
         return hashlib.sha1(data).digest() == expected_hash
 
@@ -185,21 +186,21 @@ class PieceTracker:
     def _build_specs(self):
         cdef Py_ssize_t offset = 0
         cdef Py_ssize_t i
-        cdef Py_ssize_t pc = self._piece_count
+        cdef int pc = self._piece_count
         cdef Py_ssize_t piece_len = self._piece_length
         cdef Py_ssize_t total = self._total_length
         cdef Py_ssize_t length
         cdef Py_ssize_t hash_start
 
+        cdef const unsigned char[:] raw = self._pieces_raw
         specs = []
-        raw = self._pieces_raw
 
         for i in range(pc):
             length = total - offset
             if length > piece_len:
                 length = piece_len
             hash_start = i * _SHA1_LEN
-            piece_hash = raw[hash_start:hash_start + _SHA1_LEN]
+            piece_hash = bytes(raw[hash_start:hash_start + _SHA1_LEN])
             specs.append(
                 PieceSpec(index=<int>i, offset=<int>offset, length=<int>length, hash=piece_hash)
             )

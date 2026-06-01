@@ -1,6 +1,7 @@
 # cython: language_level=3str
 # cython: boundscheck=False
 # cython: wraparound=False
+# cython: cdivision=True
 """BitTorrent wire protocol (BEP 3) — Cython-optimized variant.
 
 This module has the **same public interface** as ``protocol.py``.
@@ -12,6 +13,7 @@ no ``from __future__ import annotations``.
 """
 
 import struct
+from struct import unpack_from as _unpack_from
 from collections.abc import Buffer
 from typing import Union
 
@@ -43,6 +45,16 @@ MSG_PIECE = _MSG_PIECE
 MSG_CANCEL = _MSG_CANCEL
 
 # ---------------------------------------------------------------------------
+# Pre-computed constant byte strings for simple messages
+# ---------------------------------------------------------------------------
+
+cdef bytes _KEEPALIVE_BYTES = struct.pack("!I", 0)
+cdef bytes _CHOKE_BYTES = struct.pack("!IB", 1, 0)
+cdef bytes _UNCHOKE_BYTES = struct.pack("!IB", 1, 1)
+cdef bytes _INTERESTED_BYTES = struct.pack("!IB", 1, 2)
+cdef bytes _NOT_INTERESTED_BYTES = struct.pack("!IB", 1, 3)
+
+# ---------------------------------------------------------------------------
 # Type aliases (Cython-compatible — no PEP 695)
 # ---------------------------------------------------------------------------
 
@@ -57,9 +69,12 @@ InfoHash = bytes
 # ---------------------------------------------------------------------------
 
 PROTOCOL_STRING = b"BitTorrent protocol"
-HANDSHAKE_LENGTH = 1 + 19 + 8 + 20 + 20  # 68 bytes
+HANDSHAKE_LENGTH = 68  # 1 + 19 + 8 + 20 + 20
 
 cdef int _HANDSHAKE_LENGTH = 68
+
+# Pre-computed handshake prefix: pstrlen(1) + pstr(19) = 20 bytes
+cdef bytes _HANDSHAKE_PREFIX = bytes([19]) + b"BitTorrent protocol"
 
 # ---------------------------------------------------------------------------
 # Handshake
@@ -75,23 +90,19 @@ class Handshake:
     reserved: bytes = b"\x00" * 8
 
     def to_bytes(self) -> bytes:
-        return (
-            bytes([19])
-            + PROTOCOL_STRING
-            + self.reserved
-            + self.info_hash
-            + self.peer_id
-        )
+        # Single allocation via bytearray instead of 5-way concatenation
+        cdef bytearray buf = bytearray(68)
+        buf[0:20] = _HANDSHAKE_PREFIX
+        buf[20:28] = self.reserved
+        buf[28:48] = self.info_hash
+        buf[48:68] = self.peer_id
+        return bytes(buf)
 
     @classmethod
-    def from_bytes(cls, data):
-        cdef const unsigned char[:] buf
-        cdef Py_ssize_t buf_len
+    def from_bytes(cls, bytes data not None):
+        cdef const unsigned char[:] buf = data
+        cdef Py_ssize_t buf_len = len(data)
         cdef int pstrlen
-
-        raw = bytes(data)
-        buf = raw
-        buf_len = len(raw)
 
         if buf_len < _HANDSHAKE_LENGTH:
             raise ValueError(
@@ -102,14 +113,14 @@ class Handshake:
         if pstrlen != 19:
             raise ValueError(f"unexpected pstrlen: {pstrlen}")
 
-        pstr = raw[1:20]
-        if pstr != PROTOCOL_STRING:
-            raise ValueError(f"unexpected protocol string: {pstr!r}")
+        if data[1:20] != PROTOCOL_STRING:
+            raise ValueError(f"unexpected protocol string: {data[1:20]!r}")
 
-        reserved = raw[20:28]
-        info_hash = raw[28:48]
-        peer_id = raw[48:68]
-        return cls(info_hash=info_hash, peer_id=peer_id, reserved=reserved)
+        return cls(
+            info_hash=data[28:48],
+            peer_id=data[48:68],
+            reserved=data[20:28],
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -122,7 +133,7 @@ class KeepAlive:
     """Keep-alive: length-prefixed zero-length message."""
 
     def to_bytes(self) -> bytes:
-        return struct.pack("!I", 0)
+        return _KEEPALIVE_BYTES
 
 
 @dataclass(frozen=True, slots=True)
@@ -130,7 +141,7 @@ class Choke:
     msg_id: int = field(default=_MSG_CHOKE, init=False)
 
     def to_bytes(self) -> bytes:
-        return struct.pack("!IB", 1, self.msg_id)
+        return _CHOKE_BYTES
 
 
 @dataclass(frozen=True, slots=True)
@@ -138,7 +149,7 @@ class Unchoke:
     msg_id: int = field(default=_MSG_UNCHOKE, init=False)
 
     def to_bytes(self) -> bytes:
-        return struct.pack("!IB", 1, self.msg_id)
+        return _UNCHOKE_BYTES
 
 
 @dataclass(frozen=True, slots=True)
@@ -146,7 +157,7 @@ class Interested:
     msg_id: int = field(default=_MSG_INTERESTED, init=False)
 
     def to_bytes(self) -> bytes:
-        return struct.pack("!IB", 1, self.msg_id)
+        return _INTERESTED_BYTES
 
 
 @dataclass(frozen=True, slots=True)
@@ -154,7 +165,7 @@ class NotInterested:
     msg_id: int = field(default=_MSG_NOT_INTERESTED, init=False)
 
     def to_bytes(self) -> bytes:
-        return struct.pack("!IB", 1, self.msg_id)
+        return _NOT_INTERESTED_BYTES
 
 
 @dataclass(frozen=True, slots=True)
@@ -180,10 +191,11 @@ class Bitfield:
     def has_piece(self, int index) -> bool:
         cdef Py_ssize_t byte_index = index >> 3
         cdef int bit_offset
-        if byte_index >= len(self.data):
+        cdef const unsigned char[:] buf = self.data
+        if byte_index >= len(buf):
             return False
         bit_offset = 7 - (index & 7)
-        return bool(self.data[byte_index] & (1 << bit_offset))
+        return (buf[byte_index] >> bit_offset) & 1
 
 
 @dataclass(frozen=True, slots=True)
@@ -210,8 +222,7 @@ class Piece:
 
     def to_bytes(self) -> bytes:
         cdef Py_ssize_t length = 9 + len(self.block)
-        header = struct.pack("!IBII", length, _MSG_PIECE, self.index, self.begin)
-        return header + self.block
+        return struct.pack("!IBII", length, _MSG_PIECE, self.index, self.begin) + self.block
 
 
 @dataclass(frozen=True, slots=True)
@@ -248,16 +259,16 @@ PeerMessage = Union[
 # ---------------------------------------------------------------------------
 
 
-def parse_message(data: bytes):
+def parse_message(bytes data not None):
     """Parse a single peer message from *data* (without the 4-byte length prefix)."""
     cdef Py_ssize_t data_len = len(data)
     cdef int msg_id
+    cdef unsigned int index, begin, length
 
     if data_len == 0:
         return KeepAlive()
 
     msg_id = data[0]
-    payload = data[1:]
 
     if msg_id == _MSG_CHOKE:
         return Choke()
@@ -268,18 +279,19 @@ def parse_message(data: bytes):
     elif msg_id == _MSG_NOT_INTERESTED:
         return NotInterested()
     elif msg_id == _MSG_HAVE:
-        (index,) = struct.unpack("!I", payload[:4])
+        # unpack_from reads directly — no payload slice needed
+        (index,) = _unpack_from("!I", data, 1)
         return Have(index=index)
     elif msg_id == _MSG_BITFIELD:
-        return Bitfield(data=payload)
+        return Bitfield(data=data[1:])
     elif msg_id == _MSG_REQUEST:
-        index, begin, length = struct.unpack("!III", payload[:12])
+        index, begin, length = _unpack_from("!III", data, 1)
         return Request(index=index, begin=begin, length=length)
     elif msg_id == _MSG_PIECE:
-        index, begin = struct.unpack("!II", payload[:8])
-        return Piece(index=index, begin=begin, block=payload[8:])
+        index, begin = _unpack_from("!II", data, 1)
+        return Piece(index=index, begin=begin, block=data[9:])
     elif msg_id == _MSG_CANCEL:
-        index, begin, length = struct.unpack("!III", payload[:12])
+        index, begin, length = _unpack_from("!III", data, 1)
         return Cancel(index=index, begin=begin, length=length)
     else:
         raise ValueError(f"unknown message id: {msg_id}")
