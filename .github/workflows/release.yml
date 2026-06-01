@@ -40,72 +40,23 @@ jobs:
         with:
           python-version: "3.14"
           allow-prereleases: true
-      - name: Install build toolchain
-        run: pip install build meson-python meson ninja cython>=3
-      - name: Build wheel
-        run: python -m build --wheel
-      - name: Verify wheel contents
-        shell: python
-        run: |
-          import zipfile, glob
-          wheels = glob.glob("dist/*.whl")
-          assert wheels, "No wheel found"
-          with zipfile.ZipFile(wheels[0]) as zf:
-              names = zf.namelist()
-              assert any("bencode.py" in n for n in names), \
-                  f"bencode.py missing from wheel -- fallback broken. Files: {names}"
-              print(f"[OK] bencode.py present in {wheels[0]}")
-              compiled = [n for n in names if "bencode" in n and n.endswith((".so", ".pyd"))]
-              if compiled:
-                  print(f"[OK] Compiled extension: {compiled}")
-              else:
-                  print("[WARN] No compiled extension (pure-Python wheel)")
+      - name: Build wheels (cibuildwheel)
+        uses: pypa/cibuildwheel@v2.23
+        env:
+          CIBW_BUILD: "cp314-*"
+          CIBW_SKIP: "*-musllinux_*"
+          CIBW_BUILD_FRONTEND: "build"
+          CIBW_BEFORE_BUILD: "pip install meson-python meson ninja cython>=3"
+          CIBW_TEST_REQUIRES: "later"
+          CIBW_TEST_COMMAND: "python -m unittest discover {project}/tests"
       - uses: actions/upload-artifact@v4
         with:
           name: dist-wheel-${{ matrix.os }}
-          path: dist/*.whl
-
-  test-wheel:
-    name: Test wheel (${{ matrix.os }})
-    needs: build-wheels
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        include:
-          - os: ubuntu-latest
-          - os: macos-14
-          - os: windows-latest
-    steps:
-      - uses: actions/checkout@v4  # for tests/
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.14"
-          allow-prereleases: true
-      - uses: actions/download-artifact@v4
-        with:
-          name: dist-wheel-${{ matrix.os }}
-          path: dist/
-      - name: Install wheel + test deps
-        shell: bash
-        run: |
-          pip install dist/*.whl
-          pip install later
-      - name: Verify compilation status
-        shell: python
-        run: |
-          from aiobt._compiled import compilation_status
-          status = compilation_status()
-          print(f"Compilation status: {status}")
-          if status["bencode"]:
-              print("[OK] Running with compiled bencode")
-          else:
-              print("[WARN] Running pure Python fallback")
-      - name: Run tests
-        run: python -m unittest discover tests
+          path: wheelhouse/*.whl
 
   publish:
     name: Publish to PyPI
-    needs: [build-sdist, build-wheels, test-wheel]
+    needs: [build-sdist, build-wheels]
     runs-on: ubuntu-latest
     environment:
       name: pypi
