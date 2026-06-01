@@ -318,7 +318,8 @@ class TestRemoveTorrent(unittest.TestCase):
 
                     # Start a waiter task
                     async def waiter() -> bool:
-                        await handle.wait(timeout=5.0)
+                        async with asyncio.timeout(5.0):
+                            await handle.wait()
                         return True
 
                     task = asyncio.create_task(waiter())
@@ -398,7 +399,7 @@ class TestClientContextManager(unittest.TestCase):
 
 
 class TestWaitTimeout(unittest.TestCase):
-    """Test handle.wait() timeout behavior."""
+    """Test handle.wait() with asyncio.timeout."""
 
     def test_wait_times_out(self) -> None:
         meta, path = _make_torrent()
@@ -407,8 +408,9 @@ class TestWaitTimeout(unittest.TestCase):
             async def run() -> None:
                 async with Client(storage=_MemoryStorage()) as client:
                     handle = await client.add_torrent(meta)
-                    with self.assertRaises(asyncio.TimeoutError):
-                        await handle.wait(timeout=0.05)
+                    with self.assertRaises(TimeoutError):
+                        async with asyncio.timeout(0.05):
+                            await handle.wait()
 
             asyncio.run(run())
         finally:

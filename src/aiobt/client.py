@@ -273,18 +273,15 @@ class TorrentHandle:
         except (TrackerError, OSError):  # fmt: skip
             pass  # best-effort
 
-    async def wait(self, *, timeout: float | None = None) -> None:
+    async def wait(self) -> None:
         """Block until the torrent reaches 100% or is removed.
 
-        Parameters
-        ----------
-        timeout:
-            Maximum seconds to wait.  ``None`` means wait forever.
+        Use :func:`asyncio.timeout` to bound the wait::
 
-        Raises :class:`asyncio.TimeoutError` if *timeout* expires
-        before completion.
+            async with asyncio.timeout(3600):
+                await handle.wait()
         """
-        await asyncio.wait_for(self._session.done_event.wait(), timeout=timeout)
+        await self._session.done_event.wait()
 
     def is_complete(self) -> bool:
         """Return *True* if all pieces are verified."""
@@ -442,7 +439,7 @@ class Client:
             client.on(ClientEvent.TORRENT_ADDED, my_callback)
             handle = await client.add_torrent_file("file.torrent")
             handle.on(TorrentEvent.COMPLETED, my_done_cb)
-            await handle.wait(timeout=3600)
+            await handle.wait()
     """
 
     def __init__(
