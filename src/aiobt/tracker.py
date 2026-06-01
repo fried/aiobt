@@ -82,7 +82,9 @@ async def http_announce(
     if request.event:
         params["event"] = request.event
 
-    query = urllib.parse.urlencode(params, quote_via=urllib.parse.quote)
+    query = urllib.parse.urlencode(
+        params, quote_via=urllib.parse.quote  # type: ignore[arg-type]
+    )
     full_url = f"{url}?{query}"
 
     loop = asyncio.get_running_loop()
@@ -129,7 +131,7 @@ def _parse_http_response(data: bytes) -> AnnounceResponse:
         peers = _parse_compact_peers(peers_raw)
     elif isinstance(peers_raw, list):
         # Dictionary format
-        peers = _parse_dict_peers(peers_raw)
+        peers = _parse_dict_peers(peers_raw)  # type: ignore[arg-type]
     else:
         peers = []
 
