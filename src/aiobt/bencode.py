@@ -1,8 +1,10 @@
 """Bencode encoding and decoding.
 
 Pure-Python implementation of the BitTorrent bencode serialization format
-(BEP 3). Structured as module-level functions with simple types for optional
-Cython compilation — see ``cython/README.md``.
+(BEP 3). Structured as module-level functions with simple types.
+
+The Cython-compiled variant lives in ``bencode.pyx`` — both files
+**must** expose the same public interface.
 
 Bencode supports four data types:
 
@@ -17,13 +19,10 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 
 # ---------------------------------------------------------------------------
-# Public type alias — use typing.TypeAlias for Cython compatibility
-# (Cython does not yet support PEP 695 ``type`` statements)
+# Public type alias — recursive via PEP 695 ``type`` statement (3.12+)
 # ---------------------------------------------------------------------------
 
-from typing import Union
-
-BencodeValue = Union[int, bytes, "list[BencodeValue]", "dict[bytes, BencodeValue]"]
+type BencodeValue = int | bytes | list[BencodeValue] | dict[bytes, BencodeValue]
 
 # Sentinels used by the decoder
 _CHR_I = ord("i")  # 105
@@ -85,16 +84,17 @@ def _decode_any(buf: memoryview, pos: int) -> tuple[BencodeValue, int]:
         raise DecodeError(f"unexpected end of data at position {pos}")
 
     lead = buf[pos]
-    if lead == _CHR_I:
-        return _decode_int(buf, pos)
-    elif lead == _CHR_L:
-        return _decode_list(buf, pos)
-    elif lead == _CHR_D:
-        return _decode_dict(buf, pos)
-    elif lead in _DIGITS:
-        return _decode_bytes(buf, pos)
-    else:
-        raise DecodeError(f"unexpected byte {chr(lead)!r} at position {pos}")
+    match lead:
+        case b if b == _CHR_I:
+            return _decode_int(buf, pos)
+        case b if b == _CHR_L:
+            return _decode_list(buf, pos)
+        case b if b == _CHR_D:
+            return _decode_dict(buf, pos)
+        case b if b in _DIGITS:
+            return _decode_bytes(buf, pos)
+        case _:
+            raise DecodeError(f"unexpected byte {chr(lead)!r} at position {pos}")
 
 
 def _decode_int(buf: memoryview, pos: int) -> tuple[int, int]:
@@ -220,16 +220,17 @@ def encode(value: BencodeValue) -> bytes:
 
 def _encode_any(value: BencodeValue, parts: list[bytes]) -> None:
     """Encode *value*, appending byte fragments to *parts*."""
-    if isinstance(value, int):
-        _encode_int(value, parts)
-    elif isinstance(value, bytes):
-        _encode_bytes(value, parts)
-    elif isinstance(value, list):
-        _encode_list(value, parts)
-    elif isinstance(value, dict):
-        _encode_dict(value, parts)
-    else:
-        raise EncodeError(f"unsupported type: {type(value).__name__}")
+    match value:
+        case int():
+            _encode_int(value, parts)
+        case bytes():
+            _encode_bytes(value, parts)
+        case list():
+            _encode_list(value, parts)
+        case dict():
+            _encode_dict(value, parts)
+        case _:
+            raise EncodeError(f"unsupported type: {type(value).__name__}")
 
 
 def _encode_int(value: int, parts: list[bytes]) -> None:

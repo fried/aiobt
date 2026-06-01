@@ -1,37 +1,32 @@
-"""Bencode encoding and decoding.
+# cython: language_level=3str
+# cython: boundscheck=False
+# cython: wraparound=False
+# cython: cdivision=True
+"""Bencode encoding and decoding — Cython-optimized variant.
 
-Pure-Python implementation of the BitTorrent bencode serialization format
-(BEP 3). Structured as module-level functions with simple types for optional
-Cython compilation — see ``cython/README.md``.
+This module has the **same public interface** as ``bencode.py``.
+When compiled, Python's import system prefers the ``.so`` over
+the ``.py`` fallback automatically.
 
-Bencode supports four data types:
-
-- Byte strings: ``<length>:<data>``
-- Integers: ``i<integer>e``
-- Lists: ``l<items>e``
-- Dictionaries: ``d<key><value>...e`` (keys must be byte strings, sorted)
+Cython constraints: no ``match``, no PEP 695 ``type``, no walrus
+in complex expressions.  Use ``cdef`` locals and typed memoryview
+access for speed.
 """
 
-from __future__ import annotations
-
 from collections.abc import Mapping, Sequence
-
-# ---------------------------------------------------------------------------
-# Public type alias — use typing.TypeAlias for Cython compatibility
-# (Cython does not yet support PEP 695 ``type`` statements)
-# ---------------------------------------------------------------------------
-
 from typing import Union
 
+# Public type alias — Cython-compatible form
 BencodeValue = Union[int, bytes, "list[BencodeValue]", "dict[bytes, BencodeValue]"]
 
-# Sentinels used by the decoder
-_CHR_I = ord("i")  # 105
-_CHR_L = ord("l")  # 108
-_CHR_D = ord("d")  # 100
-_CHR_E = ord("e")  # 101
-_CHR_COLON = ord(":")  # 58
-_DIGITS = frozenset(b"0123456789")
+# Sentinels — typed as C ints for fast comparison
+cdef int _CHR_I = 105      # ord("i")
+cdef int _CHR_L = 108      # ord("l")
+cdef int _CHR_D = 100      # ord("d")
+cdef int _CHR_E = 101      # ord("e")
+cdef int _CHR_COLON = 58   # ord(":")
+cdef int _CHR_0 = 48       # ord("0")
+cdef int _CHR_9 = 57       # ord("9")
 
 
 class BencodeError(Exception):
@@ -51,60 +46,70 @@ class EncodeError(BencodeError):
 # ===================================================================
 
 
-def decode(data: bytes | bytearray | memoryview) -> BencodeValue:
+def decode(data):
     """Decode a single bencoded value from *data*.
 
     Raises :class:`DecodeError` on malformed input.
     """
     if not data:
         raise DecodeError("empty data")
-    buf = memoryview(data) if not isinstance(data, memoryview) else data
-    value, pos = _decode_any(buf, 0)
-    if pos != len(buf):
+    cdef const unsigned char[:] buf = _to_buffer(data)
+    cdef Py_ssize_t buf_len = len(buf)
+    cdef Py_ssize_t pos = 0
+    value, pos = _decode_any(buf, buf_len, pos)
+    if pos != buf_len:
         raise DecodeError(f"trailing data at position {pos}")
     return value
 
 
-def decode_all(data: bytes | bytearray | memoryview) -> list[BencodeValue]:
+def decode_all(data):
     """Decode *all* concatenated bencoded values from *data*."""
-    buf = memoryview(data) if not isinstance(data, memoryview) else data
-    values: list[BencodeValue] = []
-    pos = 0
-    while pos < len(buf):
-        value, pos = _decode_any(buf, pos)
+    cdef const unsigned char[:] buf = _to_buffer(data)
+    cdef Py_ssize_t buf_len = len(buf)
+    cdef Py_ssize_t pos = 0
+    values = []
+    while pos < buf_len:
+        value, pos = _decode_any(buf, buf_len, pos)
         values.append(value)
     return values
+
+
+cdef inline const unsigned char[:] _to_buffer(data):
+    """Coerce input to a typed memoryview."""
+    if isinstance(data, memoryview):
+        return data.cast('B')
+    return data
 
 
 # --- internal dispatch -----------------------------------------------------
 
 
-def _decode_any(buf: memoryview, pos: int) -> tuple[BencodeValue, int]:
+cdef _decode_any(const unsigned char[:] buf, Py_ssize_t buf_len, Py_ssize_t pos):
     """Dispatch to the correct decoder based on the leading byte."""
-    if pos >= len(buf):
+    cdef unsigned char lead
+    if pos >= buf_len:
         raise DecodeError(f"unexpected end of data at position {pos}")
 
     lead = buf[pos]
     if lead == _CHR_I:
-        return _decode_int(buf, pos)
+        return _decode_int(buf, buf_len, pos)
     elif lead == _CHR_L:
-        return _decode_list(buf, pos)
+        return _decode_list(buf, buf_len, pos)
     elif lead == _CHR_D:
-        return _decode_dict(buf, pos)
-    elif lead in _DIGITS:
-        return _decode_bytes(buf, pos)
+        return _decode_dict(buf, buf_len, pos)
+    elif _CHR_0 <= lead <= _CHR_9:
+        return _decode_bytes(buf, buf_len, pos)
     else:
         raise DecodeError(f"unexpected byte {chr(lead)!r} at position {pos}")
 
 
-def _decode_int(buf: memoryview, pos: int) -> tuple[int, int]:
+cdef _decode_int(const unsigned char[:] buf, Py_ssize_t buf_len, Py_ssize_t pos):
     """Decode ``i<integer>e`` starting at *pos*."""
-    # skip 'i'
-    pos += 1
-    end = _find_byte(buf, _CHR_E, pos)
+    cdef Py_ssize_t end
+    pos += 1  # skip 'i'
+    end = _find_byte(buf, buf_len, _CHR_E, pos)
     raw = bytes(buf[pos:end])
 
-    # Validate: no leading zeros (except i0e), no empty, no i-0e
     if not raw:
         raise DecodeError("empty integer")
     if raw == b"-0":
@@ -122,12 +127,13 @@ def _decode_int(buf: memoryview, pos: int) -> tuple[int, int]:
     return value, end + 1
 
 
-def _decode_bytes(buf: memoryview, pos: int) -> tuple[bytes, int]:
+cdef _decode_bytes(const unsigned char[:] buf, Py_ssize_t buf_len, Py_ssize_t pos):
     """Decode ``<length>:<data>`` starting at *pos*."""
-    colon = _find_byte(buf, _CHR_COLON, pos)
+    cdef Py_ssize_t colon, length, start, end
+
+    colon = _find_byte(buf, buf_len, _CHR_COLON, pos)
     raw_len = bytes(buf[pos:colon])
 
-    # No leading zeros in length (except "0:")
     if len(raw_len) > 1 and raw_len[0:1] == b"0":
         raise DecodeError(f"leading zero in string length: {raw_len!r}")
 
@@ -138,62 +144,63 @@ def _decode_bytes(buf: memoryview, pos: int) -> tuple[bytes, int]:
 
     start = colon + 1
     end = start + length
-    if end > len(buf):
+    if end > buf_len:
         raise DecodeError(
             f"string of length {length} extends past end of data "
-            f"(position {start}, buffer length {len(buf)})"
+            f"(position {start}, buffer length {buf_len})"
         )
     return bytes(buf[start:end]), end
 
 
-def _decode_list(buf: memoryview, pos: int) -> tuple[list[BencodeValue], int]:
+cdef _decode_list(const unsigned char[:] buf, Py_ssize_t buf_len, Py_ssize_t pos):
     """Decode ``l<items>e`` starting at *pos*."""
     pos += 1  # skip 'l'
-    items: list[BencodeValue] = []
+    items = []
     while True:
-        if pos >= len(buf):
+        if pos >= buf_len:
             raise DecodeError("unterminated list")
         if buf[pos] == _CHR_E:
             return items, pos + 1
-        value, pos = _decode_any(buf, pos)
+        value, pos = _decode_any(buf, buf_len, pos)
         items.append(value)
 
 
-def _decode_dict(buf: memoryview, pos: int) -> tuple[dict[bytes, BencodeValue], int]:
-    """Decode ``d<key><value>...e`` starting at *pos*.
-
-    Keys must be byte strings in sorted order per the spec.
-    """
+cdef _decode_dict(const unsigned char[:] buf, Py_ssize_t buf_len, Py_ssize_t pos):
+    """Decode ``d<key><value>...e`` starting at *pos*."""
     pos += 1  # skip 'd'
-    result: dict[bytes, BencodeValue] = {}
-    prev_key: bytes | None = None
+    result = {}
+    prev_key = None
 
     while True:
-        if pos >= len(buf):
+        if pos >= buf_len:
             raise DecodeError("unterminated dict")
         if buf[pos] == _CHR_E:
             return result, pos + 1
 
-        # Keys must be byte strings
-        if buf[pos] not in _DIGITS:
+        if not (_CHR_0 <= buf[pos] <= _CHR_9):
             raise DecodeError(
                 f"dict key must be a byte string, "
                 f"got {chr(buf[pos])!r} at position {pos}"
             )
-        key, pos = _decode_bytes(buf, pos)
+        key, pos = _decode_bytes(buf, buf_len, pos)
 
-        # Enforce sorted key order
         if prev_key is not None and key <= prev_key:
             raise DecodeError(f"dict keys out of order: {prev_key!r} >= {key!r}")
         prev_key = key
 
-        value, pos = _decode_any(buf, pos)
+        value, pos = _decode_any(buf, buf_len, pos)
         result[key] = value
 
 
-def _find_byte(buf: memoryview, byte: int, start: int) -> int:
+cdef inline Py_ssize_t _find_byte(
+    const unsigned char[:] buf,
+    Py_ssize_t buf_len,
+    int byte,
+    Py_ssize_t start,
+) except -1:
     """Return the index of *byte* in *buf* starting from *start*."""
-    for i in range(start, len(buf)):
+    cdef Py_ssize_t i
+    for i in range(start, buf_len):
         if buf[i] == byte:
             return i
     raise DecodeError(f"expected {chr(byte)!r} not found after position {start}")
@@ -204,7 +211,7 @@ def _find_byte(buf: memoryview, byte: int, start: int) -> int:
 # ===================================================================
 
 
-def encode(value: BencodeValue) -> bytes:
+def encode(value) -> bytes:
     """Encode a Python value into bencode format.
 
     Accepted types: ``int``, ``bytes``, ``list`` (or any ``Sequence``
@@ -213,12 +220,12 @@ def encode(value: BencodeValue) -> bytes:
 
     Raises :class:`EncodeError` on unsupported types.
     """
-    parts: list[bytes] = []
+    parts = []
     _encode_any(value, parts)
     return b"".join(parts)
 
 
-def _encode_any(value: BencodeValue, parts: list[bytes]) -> None:
+cdef _encode_any(object value, list parts):
     """Encode *value*, appending byte fragments to *parts*."""
     if isinstance(value, int):
         _encode_int(value, parts)
@@ -232,26 +239,26 @@ def _encode_any(value: BencodeValue, parts: list[bytes]) -> None:
         raise EncodeError(f"unsupported type: {type(value).__name__}")
 
 
-def _encode_int(value: int, parts: list[bytes]) -> None:
+cdef inline _encode_int(object value, list parts):
     parts.append(b"i")
     parts.append(str(value).encode("ascii"))
     parts.append(b"e")
 
 
-def _encode_bytes(value: bytes, parts: list[bytes]) -> None:
+cdef inline _encode_bytes(bytes value, list parts):
     parts.append(str(len(value)).encode("ascii"))
     parts.append(b":")
     parts.append(value)
 
 
-def _encode_list(value: Sequence[BencodeValue], parts: list[bytes]) -> None:
+cdef _encode_list(object value, list parts):
     parts.append(b"l")
     for item in value:
         _encode_any(item, parts)
     parts.append(b"e")
 
 
-def _encode_dict(value: Mapping[bytes, BencodeValue], parts: list[bytes]) -> None:
+cdef _encode_dict(object value, list parts):
     parts.append(b"d")
     for key in sorted(value.keys()):
         if not isinstance(key, bytes):
