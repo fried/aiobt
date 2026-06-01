@@ -30,10 +30,12 @@ from types import TracebackType
 
 from dataclasses import dataclass, field
 
+from .engine import _PeerStats, run_peer
 from .events import ClientEvent, EventEmitter, TorrentEvent
 from .network import NetworkConfig
-from .peer import PeerConnection, generate_peer_id
+from .peer import PeerConnection, PeerInfo, generate_peer_id
 from .piece import PieceTracker
+from .protocol import HANDSHAKE_LENGTH, Handshake
 from .storage.base import StorageBackend
 from .torrent import InfoHash, TorrentMeta, parse_torrent_bytes, parse_torrent_file
 from .tracker import AnnounceRequest, AnnounceResponse, TrackerError, announce
@@ -228,23 +230,23 @@ class TorrentHandle:
         return await self._session.do_announce(handle=self, event=event)
 
     async def start(self) -> None:
-        """Start or resume downloading/seeding.
-
-        .. todo:: Wire into the full download loop.
-        """
+        """Start or resume downloading/seeding."""
         s = self._session
         if s.state in (TorrentState.DOWNLOADING, TorrentState.SEEDING):
             return
         old = s.state
-        s.state = TorrentState.DOWNLOADING
+        if s.tracker.is_complete:
+            s.state = TorrentState.SEEDING
+            s.done_event.set()
+        else:
+            s.state = TorrentState.DOWNLOADING
         await s.events.emit(
             TorrentEvent.STATE_CHANGED,
             self,
             old,
-            TorrentState.DOWNLOADING,
+            s.state,
             suppress_errors=True,
         )
-        # TODO: spawn download/seed task
 
     async def stop(self) -> None:
         """Stop downloading/seeding and send a 'stopped' announce."""
@@ -459,6 +461,8 @@ class Client:
         self._running = False
         self._server: asyncio.Server | None = None
         self._events = EventEmitter()
+        self._peer_tasks: set[asyncio.Task[None]] = set()
+        self._listen_port: int = 0
 
     # ----- events -----------------------------------------------------------
 
@@ -506,10 +510,25 @@ class Client:
         """Remove a callback."""
         self._events.off(event, callback)
 
+    @property
+    def listen_port(self) -> int:
+        """Return the port the client is listening on (0 if not listening)."""
+        return self._listen_port
+
     # ----- async context manager --------------------------------------------
 
     async def __aenter__(self) -> Client:
         self._running = True
+        # Start TCP server for incoming peer connections
+        self._server = await asyncio.start_server(
+            self._handle_incoming,
+            host="0.0.0.0",
+            port=self._config.listen_port,
+        )
+        # Record the actual bound port (important when listen_port=0)
+        socks = self._server.sockets
+        if socks:
+            self._listen_port = socks[0].getsockname()[1]
         return self
 
     async def __aexit__(
@@ -531,10 +550,17 @@ class Client:
             if session.task is not None and not session.task.done():
                 session.task.cancel()
 
+        # Cancel peer tasks
+        for t in self._peer_tasks:
+            if not t.done():
+                t.cancel()
+
         # Wait for tasks to finish
         tasks = [s.task for s in self._sessions.values() if s.task is not None]
+        tasks.extend(self._peer_tasks)
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
+        self._peer_tasks.clear()
 
         # Disconnect all peers
         for session in self._sessions.values():
@@ -637,6 +663,49 @@ class Client:
         """Return handles for all loaded torrents."""
         return [TorrentHandle(s) for s in self._sessions.values()]
 
+    async def add_peer(
+        self,
+        host: str,
+        port: int,
+        info_hash: InfoHash,
+    ) -> None:
+        """Manually connect to a peer for the given torrent.
+
+        This is useful when LSD / trackers aren't available and you
+        know the peer address directly (e.g. in tests).
+        """
+        self._check_running()
+        session = self._sessions.get(info_hash)
+        if session is None:
+            raise ValueError("no torrent loaded for this info_hash")
+
+        addr = (host, port)
+        if addr in session.peers:
+            return  # already connected
+
+        info = PeerInfo(host=host, port=port)
+        peer = PeerConnection(
+            info=info,
+            info_hash=info_hash,
+            our_peer_id=self._config.peer_id,
+        )
+        try:
+            await peer.connect(timeout=self._config.request_timeout)
+        except OSError, asyncio.TimeoutError:
+            return  # can't connect, silently skip
+
+        session.peers[addr] = peer
+        handle = TorrentHandle(session)
+        await session.events.emit(
+            TorrentEvent.PEER_CONNECTED, handle, addr, suppress_errors=True
+        )
+        stats = _PeerStats()
+        task = asyncio.create_task(
+            self._run_peer_wrapper(session, peer, handle, stats, addr)
+        )
+        self._peer_tasks.add(task)
+        task.add_done_callback(self._peer_tasks.discard)
+
     # ----- internal ---------------------------------------------------------
 
     async def _register(
@@ -664,6 +733,95 @@ class Client:
         if start:
             await handle.start()
         return handle
+
+    async def _handle_incoming(
+        self,
+        reader: asyncio.StreamReader,
+        writer: asyncio.StreamWriter,
+    ) -> None:
+        """Handle an incoming TCP connection from a peer."""
+        try:
+            # Read handshake
+            data = await asyncio.wait_for(
+                reader.readexactly(HANDSHAKE_LENGTH), timeout=10.0
+            )
+            hs = Handshake.from_bytes(data)
+
+            session = self._sessions.get(hs.info_hash)
+            if session is None:
+                writer.close()
+                await writer.wait_closed()
+                return
+
+            # Send our handshake back
+            our_hs = Handshake(info_hash=hs.info_hash, peer_id=self._config.peer_id)
+            writer.write(our_hs.to_bytes())
+            await writer.drain()
+
+            addr_info = writer.get_extra_info("peername")
+            addr = (addr_info[0], addr_info[1]) if addr_info else ("?", 0)
+
+            info = PeerInfo(host=addr[0], port=addr[1], peer_id=hs.peer_id)
+            peer = PeerConnection(
+                info=info,
+                info_hash=hs.info_hash,
+                our_peer_id=self._config.peer_id,
+            )
+            # Inject the already-connected streams
+            peer._reader = reader
+            peer._writer = writer
+
+            session.peers[addr] = peer
+            handle = TorrentHandle(session)
+            await session.events.emit(
+                TorrentEvent.PEER_CONNECTED, handle, addr, suppress_errors=True
+            )
+            stats = _PeerStats()
+            task = asyncio.create_task(
+                self._run_peer_wrapper(session, peer, handle, stats, addr)
+            )
+            self._peer_tasks.add(task)
+            task.add_done_callback(self._peer_tasks.discard)
+
+        except (
+            asyncio.IncompleteReadError,
+            asyncio.TimeoutError,
+            ConnectionError,
+            OSError,
+            ValueError,
+        ):
+            writer.close()
+            await writer.wait_closed()
+
+    async def _run_peer_wrapper(
+        self,
+        session: _TorrentSession,
+        peer: PeerConnection,
+        handle: TorrentHandle,
+        stats: _PeerStats,
+        addr: tuple[str, int],
+    ) -> None:
+        """Wrap run_peer to update session stats on completion."""
+        try:
+            await run_peer(
+                peer=peer,
+                tracker=session.tracker,
+                storage=session.storage,
+                piece_length=session.meta.info.piece_length,
+                handle=handle,
+                done_event=session.done_event,
+                stats=stats,
+            )
+        finally:
+            session.bytes_downloaded += stats.bytes_downloaded
+            session.bytes_uploaded += stats.bytes_uploaded
+            session.peers.pop(addr, None)
+            await session.events.emit(
+                TorrentEvent.PEER_DISCONNECTED,
+                handle,
+                addr,
+                suppress_errors=True,
+            )
 
     def _check_running(self) -> None:
         if not self._running:

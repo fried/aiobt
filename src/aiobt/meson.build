@@ -6,6 +6,7 @@ py.install_sources(
   'client.py',
   'create.py',
   'discovery.py',
+  'engine.py',
   'events.py',
   'network.py',
   'peer.py',
