@@ -1,6 +1,6 @@
 [build-system]
-requires = ["setuptools>=69"]
-build-backend = "setuptools.build_meta"
+requires = ["meson-python>=0.17", "cython>=3"]
+build-backend = "mesonpy"
 
 [project]
 name = "aiobt"
@@ -32,19 +32,12 @@ dev = [
     "pyrefly",
     "later",
     "cython>=3",
-    "setuptools>=69",
 ]
 
 [project.urls]
 Homepage = "https://github.com/fried/aiobt"
 Repository = "https://github.com/fried/aiobt"
 Issues = "https://github.com/fried/aiobt/issues"
-
-[tool.setuptools.packages.find]
-where = ["src"]
-
-[tool.setuptools.package-data]
-aiobt = ["py.typed"]
 
 [tool.black]
 line-length = 88

@@ -85,17 +85,16 @@ def _decode_any(buf: memoryview, pos: int) -> tuple[BencodeValue, int]:
         raise DecodeError(f"unexpected end of data at position {pos}")
 
     lead = buf[pos]
-    match lead:
-        case b if b == _CHR_I:
-            return _decode_int(buf, pos)
-        case b if b == _CHR_L:
-            return _decode_list(buf, pos)
-        case b if b == _CHR_D:
-            return _decode_dict(buf, pos)
-        case b if b in _DIGITS:
-            return _decode_bytes(buf, pos)
-        case _:
-            raise DecodeError(f"unexpected byte {chr(lead)!r} at position {pos}")
+    if lead == _CHR_I:
+        return _decode_int(buf, pos)
+    elif lead == _CHR_L:
+        return _decode_list(buf, pos)
+    elif lead == _CHR_D:
+        return _decode_dict(buf, pos)
+    elif lead in _DIGITS:
+        return _decode_bytes(buf, pos)
+    else:
+        raise DecodeError(f"unexpected byte {chr(lead)!r} at position {pos}")
 
 
 def _decode_int(buf: memoryview, pos: int) -> tuple[int, int]:
@@ -221,17 +220,16 @@ def encode(value: BencodeValue) -> bytes:
 
 def _encode_any(value: BencodeValue, parts: list[bytes]) -> None:
     """Encode *value*, appending byte fragments to *parts*."""
-    match value:
-        case int():
-            _encode_int(value, parts)
-        case bytes():
-            _encode_bytes(value, parts)
-        case list():
-            _encode_list(value, parts)
-        case dict():
-            _encode_dict(value, parts)
-        case _:
-            raise EncodeError(f"unsupported type: {type(value).__name__}")
+    if isinstance(value, int):
+        _encode_int(value, parts)
+    elif isinstance(value, bytes):
+        _encode_bytes(value, parts)
+    elif isinstance(value, list):
+        _encode_list(value, parts)
+    elif isinstance(value, dict):
+        _encode_dict(value, parts)
+    else:
+        raise EncodeError(f"unsupported type: {type(value).__name__}")
 
 
 def _encode_int(value: int, parts: list[bytes]) -> None:

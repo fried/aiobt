@@ -48,8 +48,8 @@ jobs:
           python-version: ${{ matrix.python-version }}
           allow-prereleases: true
       - name: Install package + test deps
-        run: pip install -e ".[dev]"
-      - name: Run tests (pure Python)
+        run: pip install -e ".[dev]" --no-build-isolation
+      - name: Run tests
         run: python -m unittest discover tests
 
   cython-build:
@@ -61,28 +61,18 @@ jobs:
         with:
           python-version: "3.14"
           allow-prereleases: true
-      - name: Install with Cython extensions
-        run: pip install -e ".[dev]"
-      - name: Build Cython extensions in-place
-        run: python build_cython.py
-      - name: Verify compiled modules loaded
+      - name: Install meson toolchain
+        run: pip install meson-python meson ninja cython>=3
+      - name: Install package with Cython
+        run: pip install -e ".[dev]" --no-build-isolation
+      - name: Verify compiled bencode module loaded
         run: |
           python -c "
           from aiobt._compiled import compilation_status
           status = compilation_status()
           print(status)
           assert status['bencode'], 'bencode should be compiled'
-          print('✓ All Cython modules compiled and loadable')
+          print('✓ Cython bencode module compiled and loadable')
           "
       - name: Run tests with compiled extensions
         run: python -m unittest discover tests
-      - name: Clean and verify pure Python fallback
-        run: |
-          python build_cython.py --clean
-          python -c "
-          from aiobt._compiled import compilation_status
-          status = compilation_status()
-          assert not status['bencode'], 'bencode should be pure Python after clean'
-          print('✓ Pure Python fallback works')
-          "
-          python -m unittest discover tests
