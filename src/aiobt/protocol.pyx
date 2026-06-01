@@ -90,13 +90,12 @@ class Handshake:
     reserved: bytes = b"\x00" * 8
 
     def to_bytes(self) -> bytes:
-        # Single allocation via bytearray instead of 5-way concatenation
-        cdef bytearray buf = bytearray(68)
-        buf[0:20] = _HANDSHAKE_PREFIX
-        buf[20:28] = self.reserved
-        buf[28:48] = self.info_hash
-        buf[48:68] = self.peer_id
-        return bytes(buf)
+        return (
+            _HANDSHAKE_PREFIX
+            + self.reserved
+            + self.info_hash
+            + self.peer_id
+        )
 
     @classmethod
     def from_bytes(cls, bytes data not None):

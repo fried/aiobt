@@ -270,7 +270,7 @@ class TorrentHandle:
         )
         try:
             await self.announce(event="stopped")
-        except (TrackerError, OSError):  # fmt: skip
+        except TrackerError, OSError:
             pass  # best-effort
 
     async def wait(self) -> None:
