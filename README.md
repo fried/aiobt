@@ -142,11 +142,12 @@ pyrefly check src/
 
 ## Optional Cython Compilation
 
-The `bencode` module can be compiled with Cython for ~10x faster
-torrent file parsing:
+The `bencode` module ships with a Cython-optimized variant (`bencode.pyx`)
+that compiles automatically when building from source via the Meson backend:
 
 ```bash
-python build_cython.py
+pip install meson-python meson ninja cython
+pip install -e ".[dev]" --no-build-isolation
 ```
 
 Verify it loaded:
@@ -165,9 +166,9 @@ See `cython/README.md` for details.
 
 - **CI** runs on every push and PR: black formatting, pyrefly type
   checking, pure Python tests, and Cython compile + test.
-- **Release** on `v*` tags: builds sdist, pure Python wheel, and
-  platform-specific compiled wheels (Linux, macOS arm64/x86_64,
-  Windows), then publishes to PyPI via trusted publishing.
+- **Release** on `v*` tags: builds sdist and platform wheels
+  (Linux, macOS arm64/x86_64, Windows) with Cython, tests them,
+  then publishes to PyPI via trusted publishing.
 
 ## License
 
