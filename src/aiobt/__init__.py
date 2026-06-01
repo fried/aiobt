@@ -12,6 +12,7 @@ from .client import Client, ClientConfig, TorrentHandle, TorrentState, TorrentSt
 from .create import create_torrent, optimal_piece_size, torrent_to_bytes
 from .discovery import DiscoveredPeer, LocalDiscovery, LSDAnnounce
 from .events import ClientEvent, EventEmitter, TorrentEvent
+from .resume import ResumeData, load_resume, resume_path, save_resume
 from .network import (
     AddressFamily,
     DSCPValue,
@@ -59,6 +60,10 @@ __all__ = [
     "optimal_piece_size",
     "parse_tracker_url",
     "resolve_families",
+    "ResumeData",
+    "resume_path",
+    "load_resume",
+    "save_resume",
     "TorrentHandle",
     "TorrentInfo",
     "TorrentMeta",

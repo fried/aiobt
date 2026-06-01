@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import asyncio
 import enum
+import random
 import time
 from pathlib import Path
 from types import TracebackType
@@ -38,6 +39,7 @@ from .network import NetworkConfig
 from .peer import PeerConnection, PeerInfo, generate_peer_id
 from .piece import PieceTracker
 from .protocol import HANDSHAKE_LENGTH, Handshake
+from .resume import load_resume, resume_path, save_resume
 from .storage.base import StorageBackend
 from .torrent import InfoHash, TorrentMeta, parse_torrent_bytes, parse_torrent_file
 from .tracker import AnnounceRequest, AnnounceResponse, TrackerError, announce
@@ -236,6 +238,8 @@ class TorrentHandle:
         s = self._session
         if s.state in (TorrentState.DOWNLOADING, TorrentState.SEEDING):
             return
+        # Check resume data (runs integrity verification once)
+        await s.check_resume(self)
         old = s.state
         if s.tracker.is_complete:
             s.state = TorrentState.SEEDING
@@ -352,6 +356,9 @@ class ClientConfig:
     network: NetworkConfig = field(default_factory=NetworkConfig)
     """Network configuration (address families, LSD, bind addresses)."""
 
+    state_dir: Path | None = None
+    """Directory for resume data.  ``None`` disables resume persistence."""
+
 
 # ---------------------------------------------------------------------------
 # Internal per-torrent state
@@ -390,6 +397,15 @@ class _TorrentSession:
         # Endgame
         self.endgame: EndgameState = EndgameState()
 
+        # Resume persistence
+        self._state_dir: Path | None = config.state_dir
+        self._resume_checked: bool = False
+        if self._state_dir is not None:
+            self.events.on(TorrentEvent.PIECE_VERIFIED, self._on_piece_verified)
+
+        # BEP 12 tiered tracker list (mutable — successful URLs get promoted)
+        self._tracker_tiers: list[list[str]] = _build_tracker_tiers(meta)
+
         # Stats counters
         self.bytes_downloaded: int = 0
         self.bytes_uploaded: int = 0
@@ -398,15 +414,85 @@ class _TorrentSession:
         self.last_announce_time: float | None = None
         self.tracker_peer_count: int = 0
 
+    # ----- resume -----------------------------------------------------------
+
+    async def _on_piece_verified(self, handle: object, piece_index: int) -> None:
+        """Event handler: save resume data after each verified piece."""
+        await self._save_resume()
+
+    async def _save_resume(self) -> None:
+        """Persist current progress to the resume file."""
+        if self._state_dir is None:
+            return
+        path = resume_path(self._state_dir, self.meta.info_hash)
+        # Compute downloaded from verified pieces (always accurate)
+        downloaded = sum(self.tracker.spec(i).length for i in self.tracker.have)
+        await save_resume(
+            path,
+            info_hash=self.meta.info_hash,
+            have=self.tracker.have,
+            piece_count=self.tracker.piece_count,
+            downloaded=downloaded,
+            uploaded=self.bytes_uploaded,
+        )
+
+    async def check_resume(self, handle: object) -> None:
+        """Load resume data and verify pieces against storage.
+
+        Sets state to ``CHECKING`` during verification.  Only runs
+        once per session.
+        """
+        if self._state_dir is None or self._resume_checked:
+            return
+        self._resume_checked = True
+
+        path = resume_path(self._state_dir, self.meta.info_hash)
+        data = load_resume(path, self.meta.info_hash)
+        if data is None or not data.have:
+            return
+
+        old_state = self.state
+        self.state = TorrentState.CHECKING
+        await self.events.emit(
+            TorrentEvent.STATE_CHANGED,
+            handle,
+            old_state,
+            TorrentState.CHECKING,
+            suppress_errors=True,
+        )
+
+        for idx in sorted(data.have):
+            if idx >= self.tracker.piece_count:
+                continue
+            spec = self.tracker.spec(idx)
+            try:
+                piece_data = await self.storage.read(spec.offset, spec.length)
+                if PieceTracker.verify_piece(piece_data, spec.hash):
+                    self.tracker.mark_have(idx)
+            except OSError, ValueError:
+                pass  # piece unreadable or corrupt — will re-download
+
+        # Update byte counters from verified pieces
+        self.bytes_downloaded = sum(
+            self.tracker.spec(i).length for i in self.tracker.have
+        )
+        if data.uploaded > self.bytes_uploaded:
+            self.bytes_uploaded = data.uploaded
+
+    # ----- announce ---------------------------------------------------------
+
     async def do_announce(
         self,
         *,
         handle: TorrentHandle,
         event: str = "",
     ) -> AnnounceResponse:
-        """Run a tracker announce against all known tracker URLs."""
-        urls = self.meta.tracker_urls()
-        if not urls:
+        """Run a BEP 12 tiered tracker announce.
+
+        Tiers are tried in order; URLs within each tier are shuffled.
+        On success the working URL is promoted to the front of its tier.
+        """
+        if not self._tracker_tiers:
             raise TrackerError("torrent has no tracker URLs")
 
         request = AnnounceRequest(
@@ -420,29 +506,62 @@ class _TorrentSession:
         )
 
         last_error: Exception | None = None
-        for url in urls:
-            try:
-                response = await announce(url, request)
-                self.last_announce_time = time.time()
-                self.tracker_peer_count = len(response.peers)
-                await self.events.emit(
-                    TorrentEvent.TRACKER_RESPONSE,
-                    handle,
-                    response,
-                    suppress_errors=True,
-                )
-                return response
-            except (TrackerError, OSError) as exc:
-                last_error = exc
-                await self.events.emit(
-                    TorrentEvent.TRACKER_FAILED,
-                    handle,
-                    exc,
-                    suppress_errors=True,
-                )
-                continue
+        for tier in self._tracker_tiers:
+            # BEP 12: shuffle within tier (but keep first element stable
+            # if it was promoted from a prior success)
+            if len(tier) > 1:
+                first, rest = tier[0], tier[1:]
+                random.shuffle(rest)
+                tier[1:] = rest
 
-        raise TrackerError(f"all {len(urls)} trackers failed; last error: {last_error}")
+            for url in list(tier):  # copy — we mutate tier on success
+                try:
+                    response = await announce(url, request)
+                    self.last_announce_time = time.time()
+                    self.tracker_peer_count = len(response.peers)
+                    # BEP 12: promote successful URL to front of tier
+                    if tier[0] != url:
+                        tier.remove(url)
+                        tier.insert(0, url)
+                    await self.events.emit(
+                        TorrentEvent.TRACKER_RESPONSE,
+                        handle,
+                        response,
+                        suppress_errors=True,
+                    )
+                    return response
+                except (TrackerError, OSError) as exc:
+                    last_error = exc
+                    await self.events.emit(
+                        TorrentEvent.TRACKER_FAILED,
+                        handle,
+                        exc,
+                        suppress_errors=True,
+                    )
+                    continue
+
+        raise TrackerError(
+            f"all trackers failed ({sum(len(t) for t in self._tracker_tiers)} URLs); "
+            f"last error: {last_error}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Client
+# ---------------------------------------------------------------------------
+
+
+def _build_tracker_tiers(meta: TorrentMeta) -> list[list[str]]:
+    """Build BEP 12 tiered tracker list from torrent metadata.
+
+    If ``announce_list`` is present, it takes precedence.  Otherwise
+    the single ``announce`` URL is wrapped in a one-element tier.
+    """
+    if meta.announce_list:
+        return [list(tier) for tier in meta.announce_list if tier]
+    if meta.announce:
+        return [[meta.announce]]
+    return []
 
 
 # ---------------------------------------------------------------------------

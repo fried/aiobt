@@ -12,6 +12,7 @@ py.install_sources(
   'network.py',
   'peer.py',
   'torrent.py',
+  'resume.py',
   'tracker.py',
   'py.typed',
   subdir: 'aiobt',
