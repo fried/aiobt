@@ -1,8 +1,8 @@
 """Network configuration and address detection for aiobt.
 
 Provides :class:`NetworkConfig` — an immutable configuration object
-that controls IPv4/IPv6 binding, local peer discovery, and address
-auto-detection.
+that controls IPv4/IPv6 binding, local peer discovery, address
+auto-detection, and DSCP traffic classification.
 """
 
 from __future__ import annotations
@@ -11,6 +11,59 @@ import enum
 import socket
 
 from dataclasses import dataclass, field
+
+
+class DSCPValue(enum.IntEnum):
+    """Common DSCP codepoints (RFC 2474, RFC 8622, RFC 4594).
+
+    The value stored is the raw 6-bit DSCP field.  To set the IP TOS
+    byte, shift left by 2: ``tos = dscp << 2``.  IPv6 traffic class
+    uses the same layout.
+    """
+
+    # --- Default / Best Effort ---
+    CS0 = 0
+    """Default forwarding / best effort (DSCP 0)."""
+
+    # --- Low-priority / scavenger ---
+    LE = 1
+    """Lower-Effort (RFC 8622).  Below best effort — ideal for bulk
+    transfers like BitTorrent that should yield to everything else."""
+
+    CS1 = 8
+    """Class Selector 1 — scavenger / low-priority bulk data."""
+
+    # --- Assured Forwarding (AF) classes ---
+    AF11 = 10
+    AF12 = 12
+    AF13 = 14
+
+    AF21 = 18
+    AF22 = 20
+    AF23 = 22
+
+    AF31 = 26
+    AF32 = 28
+    AF33 = 30
+
+    AF41 = 34
+    AF42 = 36
+    AF43 = 38
+
+    # --- Class Selectors ---
+    CS2 = 16
+    CS3 = 24
+    CS4 = 32
+    CS5 = 40
+    CS6 = 48
+    CS7 = 56
+
+    # --- Expedited Forwarding ---
+    EF = 46
+    """Expedited Forwarding — low latency, low jitter (voice/video)."""
+
+    VOICE_ADMIT = 44
+    """Voice-Admit (RFC 5765)."""
 
 
 class AddressFamily(enum.Enum):
@@ -77,12 +130,24 @@ class NetworkConfig:
     address family detection — each address is bound as-is.
     """
 
+    dscp: DSCPValue | int = DSCPValue.CS0
+    """DSCP codepoint applied to all outgoing sockets.
+
+    Accepts a :class:`DSCPValue` enum member or a raw integer (0–63).
+    Default is ``CS0`` (best-effort).  For polite bulk transfers that
+    should yield to interactive traffic, use ``DSCPValue.LE`` or
+    ``DSCPValue.CS1``.
+    """
+
     def __post_init__(self) -> None:
         for addr in self.bind_addresses:
             if not isinstance(addr, str) or not addr:
                 raise ValueError(
                     f"bind address must be a non-empty string, got {addr!r}"
                 )
+        dscp_val = int(self.dscp)
+        if dscp_val < 0 or dscp_val > 63:
+            raise ValueError(f"DSCP value must be 0–63, got {dscp_val}")
 
 
 def detect_address_families() -> tuple[bool, bool]:
@@ -147,3 +212,39 @@ def resolve_families(config: NetworkConfig) -> tuple[bool, bool]:
             return True, True
         case AddressFamily.DISABLED:
             return False, False
+
+
+def dscp_to_tos(dscp: DSCPValue | int) -> int:
+    """Convert a DSCP codepoint (0–63) to the full IP TOS byte value.
+
+    The TOS / traffic-class byte is ``(DSCP << 2) | ECN``.  ECN bits
+    are left at zero (not-ECT) since we never set them ourselves.
+    """
+    return int(dscp) << 2
+
+
+def apply_dscp(sock: socket.socket, dscp: DSCPValue | int) -> None:
+    """Set the DSCP codepoint on *sock*.
+
+    Works for both IPv4 (``IP_TOS``) and IPv6 (``IPV6_TCLASS``)
+    sockets.  The call is a no-op when *dscp* is ``CS0`` (0) since
+    that's already the kernel default.
+
+    Silently ignores ``OSError`` so unprivileged processes that cannot
+    set TOS don't crash — the packet just goes out as best effort.
+    """
+    val = int(dscp)
+    if val == 0:
+        return  # CS0 is the default; nothing to set
+
+    tos = dscp_to_tos(val)
+    try:
+        family = sock.family
+        if family == socket.AF_INET6:
+            sock.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_TCLASS, tos)
+        else:
+            sock.setsockopt(socket.IPPROTO_IP, socket.IP_TOS, tos)
+    except OSError:
+        # Some platforms/containers restrict TOS changes — degrade
+        # silently to best-effort rather than crashing.
+        pass

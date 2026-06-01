@@ -206,7 +206,7 @@ class Client:
                     response = await http_announce(url, request)
                     peers = list(response.peers)
                     break
-            except TrackerError, OSError:
+            except (TrackerError, OSError):
                 continue
 
         # TODO: connect to peers, request pieces, verify, write to storage

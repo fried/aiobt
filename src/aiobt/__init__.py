@@ -11,27 +11,49 @@ from .client import Client, ClientConfig
 from .discovery import DiscoveredPeer, LocalDiscovery, LSDAnnounce
 from .network import (
     AddressFamily,
+    DSCPValue,
     NetworkConfig,
+    apply_dscp,
     detect_address_families,
+    dscp_to_tos,
     resolve_families,
 )
 from .torrent import FileEntry, TorrentInfo, TorrentMeta
+from .tracker import (
+    AnnounceRequest,
+    AnnounceResponse,
+    TrackerError,
+    announce,
+    http_announce,
+    parse_tracker_url,
+    udp_announce,
+)
 
 __all__ = [
     "__version__",
     "AddressFamily",
+    "announce",
+    "AnnounceRequest",
+    "AnnounceResponse",
+    "apply_dscp",
     "Client",
     "ClientConfig",
+    "compilation_status",
     "CYTHON_MODULES",
+    "detect_address_families",
     "DiscoveredPeer",
+    "DSCPValue",
+    "dscp_to_tos",
     "FileEntry",
+    "http_announce",
+    "is_compiled",
     "LocalDiscovery",
     "LSDAnnounce",
     "NetworkConfig",
+    "parse_tracker_url",
+    "resolve_families",
     "TorrentInfo",
     "TorrentMeta",
-    "compilation_status",
-    "detect_address_families",
-    "is_compiled",
-    "resolve_families",
+    "TrackerError",
+    "udp_announce",
 ]
