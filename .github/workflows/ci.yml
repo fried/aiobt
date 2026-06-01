@@ -64,7 +64,7 @@ jobs:
       - name: Install with Cython extensions
         run: pip install -e ".[dev]"
       - name: Build Cython extensions in-place
-        run: python setup.py build_ext --inplace
+        run: python build_cython.py
       - name: Verify compiled modules loaded
         run: |
           python -c "
