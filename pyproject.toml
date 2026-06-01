@@ -4,7 +4,7 @@ build-backend = "mesonpy"
 
 [project]
 name = "aiobt"
-version = "0.1.0a1"
+version = "26.6.0"
 description = "Pure Python asyncio BitTorrent client library"
 readme = "README.md"
 license = "MIT"
@@ -14,7 +14,7 @@ authors = [
 ]
 keywords = ["asyncio", "bittorrent", "torrent", "p2p", "peer-to-peer"]
 classifiers = [
-    "Development Status :: 2 - Pre-Alpha",
+    "Development Status :: 3 - Alpha",
     "Framework :: AsyncIO",
     "Intended Audience :: Developers",
     "Operating System :: OS Independent",

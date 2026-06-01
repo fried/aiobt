@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-import hashlib
 import os
 from unittest.mock import AsyncMock, patch
 
 import later.unittest
 
 from aiobt.client import _build_tracker_tiers, _TorrentSession, ClientConfig
-from aiobt.events import EventEmitter
 from aiobt.torrent import TorrentInfo, TorrentMeta
 from aiobt.tracker import AnnounceResponse, TrackerError
 
@@ -29,7 +27,6 @@ def _make_meta(
     )
     info_dict_bytes = b"d4:name4:test12:piece lengthi65536e6:pieces20:"
     info_dict_bytes += pieces + b"e"
-    info_hash = hashlib.sha1(info_dict_bytes).digest()
     return TorrentMeta(
         info=info,
         info_hash=os.urandom(20),  # doesn't matter for tracker tests

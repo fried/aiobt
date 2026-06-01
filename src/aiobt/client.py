@@ -510,7 +510,7 @@ class _TorrentSession:
             # BEP 12: shuffle within tier (but keep first element stable
             # if it was promoted from a prior success)
             if len(tier) > 1:
-                first, rest = tier[0], tier[1:]
+                rest = tier[1:]
                 random.shuffle(rest)
                 tier[1:] = rest
 

@@ -139,7 +139,7 @@ def _sync_http_get(url: str) -> bytes:
     import urllib.request
 
     req = urllib.request.Request(url)
-    req.add_header("User-Agent", "aiobt/0.1.0")
+    req.add_header("User-Agent", "aiobt/26.6.0")
     with urllib.request.urlopen(req, timeout=30) as resp:
         return resp.read()
 

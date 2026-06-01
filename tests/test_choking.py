@@ -7,7 +7,7 @@ import asyncio
 import later.unittest
 
 from aiobt.choking import ChokingManager, PeerRates
-from aiobt.protocol import Choke, Unchoke
+from aiobt.protocol import Unchoke
 
 
 class _FakePeer:

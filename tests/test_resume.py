@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import os
 import tempfile
 from pathlib import Path
@@ -12,7 +11,6 @@ import later.unittest
 
 from aiobt.create import create_torrent
 from aiobt.resume import (
-    ResumeData,
     _bitfield_to_have,
     _have_to_bitfield,
     load_resume,
@@ -309,7 +307,7 @@ class ResumeIntegrationTest(later.unittest.TestCase):
 
     async def test_piece_verified_saves_resume(self) -> None:
         """PIECE_VERIFIED event triggers resume save."""
-        from aiobt import Client, ClientConfig, TorrentState
+        from aiobt import Client, ClientConfig
         from aiobt.network import NetworkConfig
         from aiobt.storage import CompactStorage
 
