@@ -10,6 +10,11 @@ the ``.py`` fallback automatically.
 
 Cython constraints: no ``match``, no PEP 695 ``type``, no walrus,
 no ``from __future__ import annotations``.
+
+Typing strategy: only type args/locals that eliminate interpreter
+overhead in tight loops or arithmetic.  For methods whose body is
+a single struct.pack() or bytes concat, untyped is faster — the
+call-boundary conversion costs more than the work saved.
 """
 
 import struct
@@ -53,6 +58,20 @@ cdef bytes _CHOKE_BYTES = struct.pack("!IB", 1, 0)
 cdef bytes _UNCHOKE_BYTES = struct.pack("!IB", 1, 1)
 cdef bytes _INTERESTED_BYTES = struct.pack("!IB", 1, 2)
 cdef bytes _NOT_INTERESTED_BYTES = struct.pack("!IB", 1, 3)
+
+# Pre-compiled Struct objects — avoids format string cache lookup per call
+_HAVE_ST = struct.Struct("!IBI")
+_BITFIELD_ST = struct.Struct("!IB")
+_REQUEST_ST = struct.Struct("!IBIII")
+_PIECE_ST = struct.Struct("!IBII")
+_CANCEL_ST = struct.Struct("!IBIII")
+
+# Bind pack methods to module-level names for fastest dispatch
+_have_pack = _HAVE_ST.pack
+_bitfield_pack = _BITFIELD_ST.pack
+_request_pack = _REQUEST_ST.pack
+_piece_pack = _PIECE_ST.pack
+_cancel_pack = _CANCEL_ST.pack
 
 # ---------------------------------------------------------------------------
 # Type aliases (Cython-compatible — no PEP 695)
@@ -98,19 +117,14 @@ class Handshake:
         )
 
     @classmethod
-    def from_bytes(cls, bytes data not None):
-        cdef const unsigned char[:] buf = data
-        cdef Py_ssize_t buf_len = len(data)
-        cdef int pstrlen
-
-        if buf_len < _HANDSHAKE_LENGTH:
+    def from_bytes(cls, data):
+        if len(data) < _HANDSHAKE_LENGTH:
             raise ValueError(
-                f"handshake too short: {buf_len} < {_HANDSHAKE_LENGTH}"
+                f"handshake too short: {len(data)} < {_HANDSHAKE_LENGTH}"
             )
 
-        pstrlen = buf[0]
-        if pstrlen != 19:
-            raise ValueError(f"unexpected pstrlen: {pstrlen}")
+        if data[0] != 19:
+            raise ValueError(f"unexpected pstrlen: {data[0]}")
 
         if data[1:20] != PROTOCOL_STRING:
             raise ValueError(f"unexpected protocol string: {data[1:20]!r}")
@@ -174,7 +188,7 @@ class Have:
     index: int
 
     def to_bytes(self) -> bytes:
-        return struct.pack("!IBI", 5, _MSG_HAVE, self.index)
+        return _have_pack(5, _MSG_HAVE, self.index)
 
 
 @dataclass(frozen=True, slots=True)
@@ -184,10 +198,9 @@ class Bitfield:
     data: bytes
 
     def to_bytes(self) -> bytes:
-        cdef Py_ssize_t length = 1 + len(self.data)
-        return struct.pack("!IB", length, _MSG_BITFIELD) + self.data
+        return _bitfield_pack(1 + len(self.data), _MSG_BITFIELD) + self.data
 
-    def has_piece(self, int index) -> bool:
+    def has_piece(self, index) -> bool:
         cdef Py_ssize_t byte_index = index >> 3
         cdef int bit_offset
         cdef const unsigned char[:] buf = self.data
@@ -206,9 +219,7 @@ class Request:
     length: int
 
     def to_bytes(self) -> bytes:
-        return struct.pack(
-            "!IBIII", 13, _MSG_REQUEST, self.index, self.begin, self.length
-        )
+        return _request_pack(13, _MSG_REQUEST, self.index, self.begin, self.length)
 
 
 @dataclass(frozen=True, slots=True)
@@ -220,8 +231,7 @@ class Piece:
     block: bytes
 
     def to_bytes(self) -> bytes:
-        cdef Py_ssize_t length = 9 + len(self.block)
-        return struct.pack("!IBII", length, _MSG_PIECE, self.index, self.begin) + self.block
+        return _piece_pack(9 + len(self.block), _MSG_PIECE, self.index, self.begin) + self.block
 
 
 @dataclass(frozen=True, slots=True)
@@ -233,9 +243,7 @@ class Cancel:
     length: int
 
     def to_bytes(self) -> bytes:
-        return struct.pack(
-            "!IBIII", 13, _MSG_CANCEL, self.index, self.begin, self.length
-        )
+        return _cancel_pack(13, _MSG_CANCEL, self.index, self.begin, self.length)
 
 
 # Union of all message types (Cython-compatible — no PEP 695)
@@ -258,11 +266,10 @@ PeerMessage = Union[
 # ---------------------------------------------------------------------------
 
 
-def parse_message(bytes data not None):
+def parse_message(data):
     """Parse a single peer message from *data* (without the 4-byte length prefix)."""
     cdef Py_ssize_t data_len = len(data)
     cdef int msg_id
-    cdef unsigned int index, begin, length
 
     if data_len == 0:
         return KeepAlive()
@@ -278,7 +285,6 @@ def parse_message(bytes data not None):
     elif msg_id == _MSG_NOT_INTERESTED:
         return NotInterested()
     elif msg_id == _MSG_HAVE:
-        # unpack_from reads directly — no payload slice needed
         (index,) = _unpack_from("!I", data, 1)
         return Have(index=index)
     elif msg_id == _MSG_BITFIELD:

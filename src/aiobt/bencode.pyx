@@ -240,15 +240,11 @@ cdef _encode_any(object value, list parts):
 
 
 cdef inline _encode_int(object value, list parts):
-    parts.append(b"i")
-    parts.append(str(value).encode("ascii"))
-    parts.append(b"e")
+    parts.append(b"i" + str(value).encode("ascii") + b"e")
 
 
 cdef inline _encode_bytes(bytes value, list parts):
-    parts.append(str(len(value)).encode("ascii"))
-    parts.append(b":")
-    parts.append(value)
+    parts.append(str(len(value)).encode("ascii") + b":" + value)
 
 
 cdef _encode_list(object value, list parts):
