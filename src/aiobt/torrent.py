@@ -1,6 +1,6 @@
 """Torrent metadata parsing and frozen data models.
 
-All models are immutable ``attrs.frozen`` classes.  Torrent files are
+All models are immutable ``dataclass(frozen=True)`` classes.  Torrent files are
 parsed from raw bytes (the on-disk ``.torrent`` format) into a
 :class:`TorrentMeta` instance via :func:`parse_torrent_file` or
 :func:`parse_torrent_bytes`.
@@ -12,7 +12,7 @@ import hashlib
 from collections.abc import Sequence
 from pathlib import PurePosixPath
 
-import attrs
+from dataclasses import dataclass, field
 
 from .bencode import BencodeValue, DecodeError, decode, encode
 
@@ -35,7 +35,7 @@ _SHA1_LEN = 20
 # ---------------------------------------------------------------------------
 
 
-@attrs.frozen
+@dataclass(frozen=True, slots=True)
 class FileEntry:
     """A single file within a multi-file torrent."""
 
@@ -51,7 +51,7 @@ class FileEntry:
         return PurePosixPath(*self.path)
 
 
-@attrs.frozen
+@dataclass(frozen=True, slots=True)
 class TorrentInfo:
     """The ``info`` dictionary of a torrent — immutable."""
 
@@ -105,7 +105,7 @@ class TorrentInfo:
         raise ValueError("torrent has neither length nor files")
 
 
-@attrs.frozen
+@dataclass(frozen=True, slots=True)
 class TorrentMeta:
     """Complete parsed torrent metadata — immutable."""
 

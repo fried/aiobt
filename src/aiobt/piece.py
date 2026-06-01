@@ -10,10 +10,10 @@ from __future__ import annotations
 import hashlib
 from collections.abc import Set
 
-import attrs
+from dataclasses import dataclass, field
 
 
-@attrs.frozen
+@dataclass(frozen=True, slots=True)
 class PieceSpec:
     """Immutable specification for a single piece."""
 

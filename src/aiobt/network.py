@@ -10,7 +10,7 @@ from __future__ import annotations
 import enum
 import socket
 
-import attrs
+from dataclasses import dataclass, field
 
 
 class AddressFamily(enum.Enum):
@@ -32,7 +32,7 @@ class AddressFamily(enum.Enum):
     """Disable all networking (testing only)."""
 
 
-@attrs.frozen
+@dataclass(frozen=True, slots=True)
 class NetworkConfig:
     """Immutable network configuration.
 
@@ -69,7 +69,7 @@ class NetworkConfig:
     lsd_announce_interval: float = 300.0
     """Seconds between LSD announce rounds (default 5 min)."""
 
-    bind_addresses: tuple[str, ...] = attrs.field(factory=tuple)
+    bind_addresses: tuple[str, ...] = field(default_factory=tuple)
     """Explicit addresses to bind listeners to.
 
     When empty (default), binds to ``0.0.0.0`` and/or ``::`` based
@@ -77,11 +77,8 @@ class NetworkConfig:
     address family detection — each address is bound as-is.
     """
 
-    @bind_addresses.validator  # type: ignore[attr-defined]
-    def _validate_bind(
-        self, attribute: attrs.Attribute[tuple[str, ...]], value: tuple[str, ...]
-    ) -> None:
-        for addr in value:
+    def __post_init__(self) -> None:
+        for addr in self.bind_addresses:
             if not isinstance(addr, str) or not addr:
                 raise ValueError(
                     f"bind address must be a non-empty string, got {addr!r}"

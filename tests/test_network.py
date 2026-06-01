@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 import unittest
-
-import attrs
+from dataclasses import FrozenInstanceError
 
 from aiobt.network import (
     AddressFamily,
@@ -15,7 +14,7 @@ from aiobt.network import (
 
 
 class TestNetworkConfig(unittest.TestCase):
-    """Test NetworkConfig frozen attrs model."""
+    """Test NetworkConfig frozen dataclass model."""
 
     def test_defaults(self) -> None:
         cfg = NetworkConfig()
@@ -26,7 +25,7 @@ class TestNetworkConfig(unittest.TestCase):
 
     def test_frozen(self) -> None:
         cfg = NetworkConfig()
-        with self.assertRaises(attrs.exceptions.FrozenInstanceError):
+        with self.assertRaises(FrozenInstanceError):
             cfg.lsd_enabled = False  # type: ignore[misc]
 
     def test_ipv6_only(self) -> None:

@@ -28,7 +28,7 @@ import struct
 from collections.abc import AsyncIterator, Set
 from types import TracebackType
 
-import attrs
+from dataclasses import dataclass, field
 
 # ---------------------------------------------------------------------------
 # Constants — BEP 26
@@ -51,11 +51,11 @@ _MAX_ANNOUNCE_BATCH: int = 50
 
 
 # ---------------------------------------------------------------------------
-# Data models — frozen attrs
+# Data models — frozen dataclasses
 # ---------------------------------------------------------------------------
 
 
-@attrs.frozen
+@dataclass(frozen=True, slots=True)
 class LSDAnnounce:
     """A parsed Local Service Discovery announcement."""
 
@@ -72,7 +72,7 @@ class LSDAnnounce:
     """Unique cookie identifying the announcing client instance."""
 
 
-@attrs.frozen
+@dataclass(frozen=True, slots=True)
 class DiscoveredPeer:
     """A peer discovered via Local Service Discovery."""
 

@@ -5,12 +5,12 @@ Pure Python asyncio BitTorrent client library.
 ## Features
 
 - **Fully async** — built on `asyncio` from the ground up with an async context manager interface
-- **Zero bloat** — only runtime dependency is `attrs`
+- **Zero dependencies** — pure stdlib, no runtime dependencies
 - **Pluggable storage** — swap the filesystem backend for S3, databases, or anything else
 - **Compact mode** — store multi-file torrents as a single blob for distribution services
 - **LAN peer discovery** — BEP 26 Local Service Discovery via multicast, no tracker needed on local networks
 - **Cython-ready** — hot paths like bencode are structured for optional Cython compilation
-- **Modern Python** — requires 3.14+, uses `type` aliases, `match`, `TaskGroup`, frozen attrs classes
+- **Modern Python** — requires 3.14+, uses `type` aliases, `match`, `TaskGroup`, frozen dataclasses
 - **Type-safe** — fully typed with `py.typed` marker, checked with pyrefly
 
 ## Installation
@@ -110,7 +110,7 @@ announcements via a per-instance cookie.
 aiobt/
 ├── client.py       # Client async context manager
 ├── bencode.py      # Bencode codec (Cython-ready)
-├── torrent.py      # Torrent metadata — frozen attrs models
+├── torrent.py      # Torrent metadata — frozen dataclass models
 ├── discovery.py    # Local Service Discovery — BEP 26 multicast
 ├── peer.py         # Peer connection management
 ├── tracker.py      # HTTP + UDP tracker announce

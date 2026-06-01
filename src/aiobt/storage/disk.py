@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import attrs
+from dataclasses import dataclass, field
 
 from ..torrent import FileEntry
 from .queue import FileQueue
@@ -22,7 +22,7 @@ from .queue import FileQueue
 # ---------------------------------------------------------------------------
 
 
-@attrs.frozen
+@dataclass(frozen=True, slots=True)
 class _FileSlice:
     """A contiguous byte range within the linear torrent data that
     belongs to a single file on disk."""

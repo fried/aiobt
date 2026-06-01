@@ -11,7 +11,7 @@ import hashlib
 import os
 import struct
 
-import attrs
+from dataclasses import dataclass, field
 
 from .protocol import (
     HANDSHAKE_LENGTH,
@@ -33,7 +33,7 @@ MAX_PENDING_REQUESTS = 5  # Max outstanding requests per peer
 # ---------------------------------------------------------------------------
 
 
-@attrs.frozen
+@dataclass(frozen=True, slots=True)
 class PeerState:
     """Snapshot of a peer's current state — immutable."""
 
@@ -43,7 +43,7 @@ class PeerState:
     peer_interested: bool = False
 
 
-@attrs.frozen
+@dataclass(frozen=True, slots=True)
 class PeerInfo:
     """Identifying information for a peer."""
 

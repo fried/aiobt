@@ -1,7 +1,7 @@
 """BitTorrent wire protocol (BEP 3).
 
 Defines message types, parsing, and serialization for the peer wire
-protocol.  All messages are represented as frozen attrs classes.
+protocol.  All messages are represented as frozen dataclasses.
 """
 
 from __future__ import annotations
@@ -9,7 +9,7 @@ from __future__ import annotations
 import struct
 from collections.abc import Buffer
 
-import attrs
+from dataclasses import dataclass, field
 
 # ---------------------------------------------------------------------------
 # Type aliases
@@ -46,7 +46,7 @@ MSG_CANCEL = 8
 # ---------------------------------------------------------------------------
 
 
-@attrs.frozen
+@dataclass(frozen=True, slots=True)
 class Handshake:
     """The initial handshake exchanged between peers."""
 
@@ -85,7 +85,7 @@ class Handshake:
 # ---------------------------------------------------------------------------
 
 
-@attrs.frozen
+@dataclass(frozen=True, slots=True)
 class KeepAlive:
     """Keep-alive: length-prefixed zero-length message."""
 
@@ -93,39 +93,39 @@ class KeepAlive:
         return struct.pack("!I", 0)
 
 
-@attrs.frozen
+@dataclass(frozen=True, slots=True)
 class Choke:
-    msg_id: int = attrs.field(default=MSG_CHOKE, init=False)
+    msg_id: int = field(default=MSG_CHOKE, init=False)
 
     def to_bytes(self) -> bytes:
         return struct.pack("!IB", 1, self.msg_id)
 
 
-@attrs.frozen
+@dataclass(frozen=True, slots=True)
 class Unchoke:
-    msg_id: int = attrs.field(default=MSG_UNCHOKE, init=False)
+    msg_id: int = field(default=MSG_UNCHOKE, init=False)
 
     def to_bytes(self) -> bytes:
         return struct.pack("!IB", 1, self.msg_id)
 
 
-@attrs.frozen
+@dataclass(frozen=True, slots=True)
 class Interested:
-    msg_id: int = attrs.field(default=MSG_INTERESTED, init=False)
+    msg_id: int = field(default=MSG_INTERESTED, init=False)
 
     def to_bytes(self) -> bytes:
         return struct.pack("!IB", 1, self.msg_id)
 
 
-@attrs.frozen
+@dataclass(frozen=True, slots=True)
 class NotInterested:
-    msg_id: int = attrs.field(default=MSG_NOT_INTERESTED, init=False)
+    msg_id: int = field(default=MSG_NOT_INTERESTED, init=False)
 
     def to_bytes(self) -> bytes:
         return struct.pack("!IB", 1, self.msg_id)
 
 
-@attrs.frozen
+@dataclass(frozen=True, slots=True)
 class Have:
     """Notify that we have piece *index*."""
 
@@ -135,7 +135,7 @@ class Have:
         return struct.pack("!IBI", 5, MSG_HAVE, self.index)
 
 
-@attrs.frozen
+@dataclass(frozen=True, slots=True)
 class Bitfield:
     """Bitfield of pieces the peer has."""
 
@@ -153,7 +153,7 @@ class Bitfield:
         return bool(self.data[byte_index] & (1 << bit_offset))
 
 
-@attrs.frozen
+@dataclass(frozen=True, slots=True)
 class Request:
     """Request a block from a piece."""
 
@@ -167,7 +167,7 @@ class Request:
         )
 
 
-@attrs.frozen
+@dataclass(frozen=True, slots=True)
 class Piece:
     """A block of piece data."""
 
@@ -181,7 +181,7 @@ class Piece:
         return header + self.block
 
 
-@attrs.frozen
+@dataclass(frozen=True, slots=True)
 class Cancel:
     """Cancel a previously sent request."""
 

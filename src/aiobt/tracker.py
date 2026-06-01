@@ -11,7 +11,7 @@ import urllib.parse
 from collections.abc import Sequence
 from random import randint
 
-import attrs
+from dataclasses import dataclass, field
 
 from .bencode import decode, DecodeError
 
@@ -23,7 +23,7 @@ type PeerAddress = tuple[str, int]
 """(host, port) tuple for a peer."""
 
 
-@attrs.frozen
+@dataclass(frozen=True, slots=True)
 class AnnounceRequest:
     """Parameters for a tracker announce."""
 
@@ -38,7 +38,7 @@ class AnnounceRequest:
     numwant: int = 50
 
 
-@attrs.frozen
+@dataclass(frozen=True, slots=True)
 class AnnounceResponse:
     """Parsed tracker announce response."""
 

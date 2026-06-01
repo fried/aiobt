@@ -12,10 +12,10 @@ import asyncio
 import os
 from pathlib import Path
 
-import attrs
+from dataclasses import dataclass, field
 
 
-@attrs.frozen
+@dataclass(frozen=True, slots=True)
 class _ReadOp:
     """Immutable descriptor for a read operation."""
 
@@ -24,7 +24,7 @@ class _ReadOp:
     length: int
 
 
-@attrs.frozen
+@dataclass(frozen=True, slots=True)
 class _WriteOp:
     """Immutable descriptor for a write operation."""
 

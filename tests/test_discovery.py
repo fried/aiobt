@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import hashlib
+from dataclasses import FrozenInstanceError
 
-import attrs
 import later.unittest
 
 from aiobt.discovery import (
@@ -137,7 +137,7 @@ class TestParseAnnounce(later.unittest.TestCase):
         raw = self._build_raw(info_hashes=(ih,))
         results = parse_announce(raw, "10.0.0.1")
 
-        with self.assertRaises(attrs.exceptions.FrozenInstanceError):
+        with self.assertRaises(FrozenInstanceError):
             results[0].port = 9999  # type: ignore[misc]
 
     def test_malformed_returns_empty(self) -> None:
@@ -222,7 +222,7 @@ class TestDiscoveredPeer(later.unittest.TestCase):
         self.assertEqual(peer.host, "192.168.1.100")
         self.assertEqual(peer.port, 51413)
 
-        with self.assertRaises(attrs.exceptions.FrozenInstanceError):
+        with self.assertRaises(FrozenInstanceError):
             peer.host = "10.0.0.1"  # type: ignore[misc]
 
 
