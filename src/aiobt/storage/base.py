@@ -1,7 +1,7 @@
 """Abstract storage backend protocol.
 
 Any object that satisfies :class:`StorageBackend` can be plugged into
-:class:`~aiobt.client.BitTorrentClient`.  The protocol uses
+:class:`~aiobt.client.Client`.  The protocol uses
 :func:`typing.runtime_checkable` so backends can be validated with
 ``isinstance`` at initialization time.
 

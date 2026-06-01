@@ -23,13 +23,13 @@ pip install aiobt
 
 ```python
 import asyncio
-from aiobt import BitTorrentClient
+from aiobt import Client
 from aiobt.storage import DiskStorage
 
 async def main() -> None:
     storage = DiskStorage("/tmp/downloads")
 
-    async with BitTorrentClient(storage=storage) as client:
+    async with Client(storage=storage) as client:
         torrent = await client.add_torrent_file("archlinux-2026.05.01-x86_64.iso.torrent")
         print(f"Downloading: {torrent.info.name}")
         print(f"Size: {torrent.total_length} bytes")
@@ -46,10 +46,10 @@ For seeding servers or CDN nodes where you want simple file management,
 use `CompactStorage` to store even multi-file torrents as a single blob:
 
 ```python
-from aiobt import BitTorrentClient
+from aiobt import Client
 from aiobt.storage import CompactStorage
 
-async with BitTorrentClient(storage=CompactStorage("/srv/torrents")) as client:
+async with Client(storage=CompactStorage("/srv/torrents")) as client:
     # Multi-file torrent stored as one file on disk
     torrent = await client.add_torrent_file("linux-distro.torrent")
     await client.seed(torrent.info_hash)
@@ -108,7 +108,7 @@ announcements via a per-instance cookie.
 
 ```
 aiobt/
-├── client.py       # BitTorrentClient async context manager
+├── client.py       # Client async context manager
 ├── bencode.py      # Bencode codec (Cython-ready)
 ├── torrent.py      # Torrent metadata — frozen attrs models
 ├── discovery.py    # Local Service Discovery — BEP 26 multicast

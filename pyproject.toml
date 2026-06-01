@@ -1,6 +1,6 @@
 [build-system]
-requires = ["flit_core>=3.9,<4"]
-build-backend = "flit_core.buildapi"
+requires = ["setuptools>=69", "cython>=3"]
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "aiobt"
@@ -10,7 +10,7 @@ readme = "README.md"
 license = "MIT"
 requires-python = ">=3.14"
 authors = [
-    { name = "Jason Andrew Fried", email = "me@jasonfried.info" },
+    { name = "Jason Fried", email = "me@jasonfried.info" },
 ]
 keywords = ["asyncio", "bittorrent", "torrent", "p2p", "peer-to-peer"]
 classifiers = [
@@ -33,9 +33,7 @@ dev = [
     "black",
     "pyrefly",
     "later",
-    "cython",
-    "setuptools",
-    "wheel",
+    "cython>=3",
 ]
 
 [project.urls]
@@ -43,11 +41,11 @@ Homepage = "https://github.com/fried/aiobt"
 Repository = "https://github.com/fried/aiobt"
 Issues = "https://github.com/fried/aiobt/issues"
 
-[tool.flit.module]
-name = "aiobt"
+[tool.setuptools.packages.find]
+where = ["src"]
 
-[tool.flit.sdist]
-include = ["src/aiobt/py.typed"]
+[tool.setuptools.package-data]
+aiobt = ["py.typed"]
 
 [tool.black]
 line-length = 88
@@ -56,4 +54,3 @@ target-version = ["py314"]
 [tool.pyrefly]
 python_version = "3.14"
 source = ["src"]
-

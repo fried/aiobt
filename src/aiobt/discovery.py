@@ -12,9 +12,9 @@ Usage::
         async for peer in lsd.discovered_peers():
             print(f"Found {peer.host}:{peer.port} for {peer.info_hash.hex()}")
 
-Or as part of :class:`~aiobt.client.BitTorrentClient`::
+Or as part of :class:`~aiobt.client.Client`::
 
-    async with BitTorrentClient(storage=storage, lsd=True) as client:
+    async with Client(storage=storage, lsd=True) as client:
         ...  # LSD runs automatically
 """
 

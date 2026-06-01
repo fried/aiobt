@@ -1,8 +1,8 @@
-"""BitTorrentClient — the main async context manager interface.
+"""Client — the main async context manager interface.
 
 Usage::
 
-    async with BitTorrentClient(storage=DiskStorage("/downloads")) as client:
+    async with Client(storage=DiskStorage("/downloads")) as client:
         torrent = await client.add_torrent_file("archlinux.iso.torrent")
         await client.download(torrent.info_hash)
 """
@@ -37,7 +37,7 @@ type TorrentHandle = InfoHash
 
 @attrs.frozen
 class ClientConfig:
-    """Immutable configuration for :class:`BitTorrentClient`."""
+    """Immutable configuration for :class:`Client`."""
 
     listen_port: int = 6881
     """Port to listen for incoming peer connections."""
@@ -73,11 +73,11 @@ class _TorrentSession:
 
 
 # ---------------------------------------------------------------------------
-# BitTorrentClient
+# Client
 # ---------------------------------------------------------------------------
 
 
-class BitTorrentClient:
+class Client:
     """Async context manager for BitTorrent operations.
 
     Parameters
@@ -91,7 +91,7 @@ class BitTorrentClient:
     -------
     ::
 
-        async with BitTorrentClient(storage=DiskStorage("/dl")) as client:
+        async with Client(storage=DiskStorage("/dl")) as client:
             t = await client.add_torrent_file("file.torrent")
             await client.download(t.info_hash)
     """
@@ -114,7 +114,7 @@ class BitTorrentClient:
 
     # ----- async context manager --------------------------------------------
 
-    async def __aenter__(self) -> BitTorrentClient:
+    async def __aenter__(self) -> Client:
         self._running = True
         return self
 
@@ -253,5 +253,5 @@ class BitTorrentClient:
     def _check_running(self) -> None:
         if not self._running:
             raise RuntimeError(
-                "BitTorrentClient must be used as an async context manager"
+                "Client must be used as an async context manager"
             )
