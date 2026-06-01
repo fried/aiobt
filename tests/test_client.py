@@ -382,6 +382,67 @@ class TestTorrentHandleControl(unittest.TestCase):
             path.unlink()
 
 
+class TestAddTorrentStart(unittest.TestCase):
+    """Test start= kwarg on add_torrent*()."""
+
+    def test_start_false_stays_stopped(self) -> None:
+        meta, path = _make_torrent()
+        try:
+
+            async def run() -> None:
+                async with Client(storage=_MemoryStorage()) as client:
+                    handle = await client.add_torrent(meta)
+                    self.assertEqual(handle.state, TorrentState.STOPPED)
+
+            asyncio.run(run())
+        finally:
+            path.unlink()
+
+    def test_start_true_begins_downloading(self) -> None:
+        meta, path = _make_torrent()
+        try:
+
+            async def run() -> None:
+                async with Client(storage=_MemoryStorage()) as client:
+                    handle = await client.add_torrent(meta, start=True)
+                    self.assertEqual(handle.state, TorrentState.DOWNLOADING)
+
+            asyncio.run(run())
+        finally:
+            path.unlink()
+
+    def test_start_on_duplicate_starts_stopped(self) -> None:
+        meta, path = _make_torrent()
+        try:
+
+            async def run() -> None:
+                async with Client(storage=_MemoryStorage()) as client:
+                    h1 = await client.add_torrent(meta)
+                    self.assertEqual(h1.state, TorrentState.STOPPED)
+                    h2 = await client.add_torrent(meta, start=True)
+                    self.assertEqual(h2.state, TorrentState.DOWNLOADING)
+
+            asyncio.run(run())
+        finally:
+            path.unlink()
+
+    def test_start_on_duplicate_already_running_noop(self) -> None:
+        meta, path = _make_torrent()
+        try:
+
+            async def run() -> None:
+                async with Client(storage=_MemoryStorage()) as client:
+                    h1 = await client.add_torrent(meta, start=True)
+                    self.assertEqual(h1.state, TorrentState.DOWNLOADING)
+                    # Re-add with start=True — already running, stays DOWNLOADING
+                    h2 = await client.add_torrent(meta, start=True)
+                    self.assertEqual(h2.state, TorrentState.DOWNLOADING)
+
+            asyncio.run(run())
+        finally:
+            path.unlink()
+
+
 class TestClientContextManager(unittest.TestCase):
     """Test Client lifecycle."""
 

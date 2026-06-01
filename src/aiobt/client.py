@@ -545,27 +545,38 @@ class Client:
 
     # ----- public API -------------------------------------------------------
 
-    async def add_torrent_file(self, path: str | Path) -> TorrentHandle:
+    async def add_torrent_file(
+        self, path: str | Path, *, start: bool = False
+    ) -> TorrentHandle:
         """Load a ``.torrent`` file and return a :class:`TorrentHandle`."""
         self._check_running()
         meta = parse_torrent_file(str(path))
-        return await self._register(meta)
+        return await self._register(meta, start=start)
 
-    async def add_torrent_bytes(self, data: bytes) -> TorrentHandle:
+    async def add_torrent_bytes(
+        self, data: bytes, *, start: bool = False
+    ) -> TorrentHandle:
         """Load a torrent from raw bencoded *data*."""
         self._check_running()
         meta = parse_torrent_bytes(data)
-        return await self._register(meta)
+        return await self._register(meta, start=start)
 
-    async def add_torrent(self, meta: TorrentMeta) -> TorrentHandle:
+    async def add_torrent(
+        self, meta: TorrentMeta, *, start: bool = False
+    ) -> TorrentHandle:
         """Register an already-constructed :class:`TorrentMeta`.
 
         Use this when you've built a ``TorrentMeta`` via
         :func:`~aiobt.create.create_torrent` or received one from
         another source, instead of reading a ``.torrent`` file from disk.
+
+        Parameters
+        ----------
+        start:
+            If True, immediately transition to DOWNLOADING after registration.
         """
         self._check_running()
-        return await self._register(meta)
+        return await self._register(meta, start=start)
 
     async def remove_torrent(
         self,
@@ -623,11 +634,16 @@ class Client:
 
     # ----- internal ---------------------------------------------------------
 
-    async def _register(self, meta: TorrentMeta) -> TorrentHandle:
+    async def _register(
+        self, meta: TorrentMeta, *, start: bool = False
+    ) -> TorrentHandle:
         """Register a torrent and prepare its storage."""
         existing = self._sessions.get(meta.info_hash)
         if existing is not None:
-            return TorrentHandle(existing)
+            handle = TorrentHandle(existing)
+            if start and existing.state == TorrentState.STOPPED:
+                await handle.start()
+            return handle
 
         session = _TorrentSession(
             meta=meta,
@@ -639,6 +655,8 @@ class Client:
 
         handle = TorrentHandle(session)
         await self._events.emit(ClientEvent.TORRENT_ADDED, handle, suppress_errors=True)
+        if start:
+            await handle.start()
         return handle
 
     def _check_running(self) -> None:
