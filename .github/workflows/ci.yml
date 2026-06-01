@@ -47,6 +47,8 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           allow-prereleases: true
+      - name: Install build toolchain
+        run: pip install meson-python meson ninja cython>=3
       - name: Install package + test deps
         run: pip install -e ".[dev]" --no-build-isolation
       - name: Run tests

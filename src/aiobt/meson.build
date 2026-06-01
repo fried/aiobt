@@ -15,12 +15,11 @@ py.install_sources(
   subdir: 'aiobt',
 )
 
-# Cython extension — compiled .so replaces the pure-Python bencode.py
-# at import time. The .py source is still installed as fallback.
+# Cython extension — compiled .so from .pyx, with .py fallback
 py.install_sources('bencode.py', subdir: 'aiobt')
 py.extension_module(
   'bencode',
-  'bencode.py',
+  'bencode.pyx',
   subdir: 'aiobt',
   install: true,
 )
