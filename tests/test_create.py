@@ -15,7 +15,6 @@ from aiobt.create import (
     _scan_path,
     create_torrent,
     optimal_piece_size,
-    torrent_to_bytes,
 )
 from aiobt.torrent import parse_torrent_bytes, TorrentMeta
 

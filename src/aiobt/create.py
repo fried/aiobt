@@ -14,7 +14,7 @@ import hashlib
 import math
 import os
 import time
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 
 from dataclasses import dataclass
 
@@ -38,13 +38,13 @@ def optimal_piece_size(total_bytes: int) -> int:
     round up to the next power of two, then clamp between 16 KiB and
     16 MiB.  The result is always a power of two.
 
-    >>> optimal_piece_size(700 * 1024 * 1024)   # 700 MB  -> 512 KiB
+    >>> optimal_piece_size(700 * 1024 * 1024)  # 700 MB  -> 512 KiB
     524288
-    >>> optimal_piece_size(4_000_000_000)        # ~4 GB   -> 4 MiB
+    >>> optimal_piece_size(4_000_000_000)  # ~4 GB   -> 4 MiB
     4194304
-    >>> optimal_piece_size(50_000_000_000)       # 50 GB   -> 16 MiB (capped)
+    >>> optimal_piece_size(50_000_000_000)  # 50 GB   -> 16 MiB (capped)
     16777216
-    >>> optimal_piece_size(1024)                 # tiny    -> 16 KiB (floor)
+    >>> optimal_piece_size(1024)  # tiny    -> 16 KiB (floor)
     16384
     """
     if total_bytes <= 0:

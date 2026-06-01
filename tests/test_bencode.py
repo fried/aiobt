@@ -5,7 +5,6 @@ from __future__ import annotations
 import later.unittest
 
 from aiobt.bencode import (
-    BencodeError,
     DecodeError,
     EncodeError,
     decode,

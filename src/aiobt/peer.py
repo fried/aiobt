@@ -7,11 +7,10 @@ handshake, message framing, and connection lifecycle.
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import os
 import struct
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from .protocol import (
     HANDSHAKE_LENGTH,

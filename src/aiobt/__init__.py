@@ -1,14 +1,17 @@
 """aiobt — Pure Python asyncio BitTorrent client library.
 
 >>> async with Client(storage=DiskStorage("/downloads")) as client:
-...     torrent = await client.add_torrent_file("archlinux.iso.torrent")
-...     await client.download(torrent.info_hash)
+...     handle = await client.add_torrent_file("archlinux.iso.torrent")
+...     stats = handle.stats()
+...     await handle.wait()
 """
 
 from ._compiled import CYTHON_MODULES, compilation_status, is_compiled
 from ._version import __version__
-from .client import Client, ClientConfig
+from .client import Client, ClientConfig, TorrentHandle, TorrentState, TorrentStats
+from .create import create_torrent, optimal_piece_size, torrent_to_bytes
 from .discovery import DiscoveredPeer, LocalDiscovery, LSDAnnounce
+from .events import ClientEvent, EventEmitter, TorrentEvent
 from .network import (
     AddressFamily,
     DSCPValue,
@@ -18,7 +21,6 @@ from .network import (
     dscp_to_tos,
     resolve_families,
 )
-from .create import create_torrent, optimal_piece_size, torrent_to_bytes
 from .torrent import FileEntry, TorrentInfo, TorrentMeta
 from .tracker import (
     AnnounceRequest,
@@ -39,6 +41,7 @@ __all__ = [
     "apply_dscp",
     "Client",
     "ClientConfig",
+    "ClientEvent",
     "compilation_status",
     "create_torrent",
     "CYTHON_MODULES",
@@ -46,6 +49,7 @@ __all__ = [
     "DiscoveredPeer",
     "DSCPValue",
     "dscp_to_tos",
+    "EventEmitter",
     "FileEntry",
     "http_announce",
     "is_compiled",
@@ -55,9 +59,13 @@ __all__ = [
     "optimal_piece_size",
     "parse_tracker_url",
     "resolve_families",
+    "TorrentHandle",
     "TorrentInfo",
     "TorrentMeta",
+    "TorrentState",
+    "TorrentStats",
     "torrent_to_bytes",
+    "TorrentEvent",
     "TrackerError",
     "udp_announce",
 ]

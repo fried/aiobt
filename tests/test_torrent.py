@@ -12,7 +12,6 @@ from aiobt.bencode import DecodeError, encode
 from aiobt.torrent import (
     FileEntry,
     TorrentInfo,
-    TorrentMeta,
     parse_torrent_bytes,
     parse_torrent_file,
 )

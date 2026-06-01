@@ -11,8 +11,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  format:
-    name: Black format check
+  lint:
+    name: Ruff lint + format check
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -20,8 +20,9 @@ jobs:
         with:
           python-version: "3.14"
           allow-prereleases: true
-      - run: pip install black
-      - run: black --check src/ tests/
+      - run: pip install ruff
+      - run: ruff format --check src/ tests/
+      - run: ruff check src/ tests/
 
   typecheck:
     name: Pyrefly type check

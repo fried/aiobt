@@ -9,10 +9,9 @@ parsed from raw bytes (the on-disk ``.torrent`` format) into a
 from __future__ import annotations
 
 import hashlib
-from collections.abc import Sequence
 from pathlib import Path, PurePosixPath
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from .bencode import BencodeValue, DecodeError, decode, encode
 

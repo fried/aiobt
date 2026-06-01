@@ -28,7 +28,7 @@ dependencies = []
 
 [project.optional-dependencies]
 dev = [
-    "black",
+    "ruff",
     "pyrefly",
     "later",
     "cython>=3",
@@ -39,9 +39,12 @@ Homepage = "https://github.com/fried/aiobt"
 Repository = "https://github.com/fried/aiobt"
 Issues = "https://github.com/fried/aiobt/issues"
 
-[tool.black]
+[tool.ruff]
 line-length = 88
-target-version = ["py314"]
+target-version = "py314"
+
+[tool.ruff.format]
+docstring-code-format = true
 
 [tool.pyrefly]
 python_version = "3.14"

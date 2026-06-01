@@ -8,7 +8,6 @@ import unittest
 
 from aiobt.tracker import (
     AnnounceRequest,
-    AnnounceResponse,
     TrackerError,
     _ACTION_ANNOUNCE,
     _ACTION_CONNECT,
@@ -18,7 +17,6 @@ from aiobt.tracker import (
     _EVENT_NONE,
     _EVENT_STARTED,
     _EVENT_STOPPED,
-    _UDP_MAGIC,
     _UDPTrackerProtocol,
     _new_transaction_id,
     _parse_compact_peers,
@@ -399,7 +397,6 @@ class TestUDPConnect(unittest.TestCase):
 
         # We need to intercept what udp_connect sends, so we mock
         # the protocol's send + expect
-        original_send = proto.send
         captured_payload: bytes | None = None
 
         def fake_send(data: bytes) -> None:

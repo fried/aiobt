@@ -10,7 +10,6 @@ import os
 import socket
 import struct
 import urllib.parse
-from collections.abc import Sequence
 from random import randint
 
 from dataclasses import dataclass, field
@@ -124,7 +123,8 @@ async def http_announce(
         params["event"] = request.event
 
     query = urllib.parse.urlencode(
-        params, quote_via=urllib.parse.quote  # type: ignore[arg-type]
+        params,
+        quote_via=urllib.parse.quote,  # type: ignore[arg-type]
     )
     full_url = f"{url}?{query}"
 

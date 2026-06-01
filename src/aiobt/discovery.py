@@ -25,10 +25,10 @@ import hashlib
 import os
 import socket
 import struct
-from collections.abc import AsyncIterator, Set
+from collections.abc import AsyncIterator
 from types import TracebackType
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 # ---------------------------------------------------------------------------
 # Constants — BEP 26
@@ -106,7 +106,7 @@ def format_announce(
     (BEP 26 allows multiple per message).
     """
     lines: list[str] = [
-        f"BT-SEARCH * HTTP/1.1",
+        "BT-SEARCH * HTTP/1.1",
         f"Host: {host}:{LSD_PORT}",
         f"Port: {listen_port}",
     ]

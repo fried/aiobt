@@ -10,7 +10,7 @@ from __future__ import annotations
 import hashlib
 from collections.abc import Set
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 
 @dataclass(frozen=True, slots=True)
