@@ -10,6 +10,7 @@ from pathlib import Path
 
 from aiobt.client import Client, TorrentHandle, TorrentState, TorrentStats
 from aiobt.create import create_torrent
+from aiobt.events import TorrentEvent
 from aiobt.storage.base import StorageBackend
 from aiobt.torrent import TorrentMeta
 
@@ -439,6 +440,90 @@ class TestAddTorrentStart(unittest.TestCase):
                     self.assertEqual(h2.state, TorrentState.DOWNLOADING)
 
             asyncio.run(run())
+        finally:
+            path.unlink()
+
+
+class TestClientTorrentEventBubbling(unittest.TestCase):
+    """TorrentEvents registered on the Client fire for all torrents."""
+
+    def test_state_changed_bubbles_to_client(self) -> None:
+        meta, path = _make_torrent()
+        try:
+            results: list[tuple[str, object, object]] = []
+
+            async def run() -> None:
+                async with Client(storage=_MemoryStorage()) as client:
+
+                    async def on_state(handle, old, new):
+                        results.append((handle.name, old, new))
+
+                    client.on(TorrentEvent.STATE_CHANGED, on_state)
+                    handle = await client.add_torrent(meta)
+                    await handle.start()
+
+            asyncio.run(run())
+            self.assertEqual(len(results), 1)
+            self.assertEqual(results[0][0], meta.info.name)
+            self.assertEqual(results[0][1], TorrentState.STOPPED)
+            self.assertEqual(results[0][2], TorrentState.DOWNLOADING)
+        finally:
+            path.unlink()
+
+    def test_client_torrent_event_fires_for_multiple_torrents(self) -> None:
+        meta1, path1 = _make_torrent()
+        # Create a second distinct torrent
+        with tempfile.NamedTemporaryFile(suffix=".dat", delete=False) as f2:
+            f2.write(os.urandom(30_000))
+            f2.flush()
+            path2 = Path(f2.name)
+        meta2 = create_torrent(path2, trackers=["udp://t:6969/announce"])
+        try:
+            names: list[str] = []
+
+            async def run() -> None:
+                async with Client(storage=_MemoryStorage()) as client:
+
+                    async def on_state(handle, old, new):
+                        names.append(handle.name)
+
+                    client.on(TorrentEvent.STATE_CHANGED, on_state)
+                    h1 = await client.add_torrent(meta1)
+                    h2 = await client.add_torrent(meta2)
+                    await h1.start()
+                    await h2.start()
+
+            asyncio.run(run())
+            self.assertEqual(len(names), 2)
+            self.assertIn(meta1.info.name, names)
+            self.assertIn(meta2.info.name, names)
+        finally:
+            path1.unlink()
+            path2.unlink()
+
+    def test_handle_and_client_both_fire(self) -> None:
+        """Per-torrent and client-level listeners both fire."""
+        meta, path = _make_torrent()
+        try:
+            sources: list[str] = []
+
+            async def run() -> None:
+                async with Client(storage=_MemoryStorage()) as client:
+
+                    async def client_cb(handle, old, new):
+                        sources.append("client")
+
+                    async def handle_cb(handle, old, new):
+                        sources.append("handle")
+
+                    client.on(TorrentEvent.STATE_CHANGED, client_cb)
+                    handle = await client.add_torrent(meta)
+                    handle.on(TorrentEvent.STATE_CHANGED, handle_cb)
+                    await handle.start()
+
+            asyncio.run(run())
+            self.assertIn("client", sources)
+            self.assertIn("handle", sources)
         finally:
             path.unlink()
 

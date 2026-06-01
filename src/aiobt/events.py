@@ -102,10 +102,11 @@ class EventEmitter:
     ``suppress_errors=True`` was passed to :meth:`emit`).
     """
 
-    __slots__ = ("_listeners",)
+    __slots__ = ("_listeners", "_parent")
 
-    def __init__(self) -> None:
+    def __init__(self, parent: EventEmitter | None = None) -> None:
         self._listeners: defaultdict[EventType, list[EventCallback]] = defaultdict(list)
+        self._parent = parent
 
     def on(
         self, event: EventType, callback: EventCallback | None = None
@@ -177,22 +178,27 @@ class EventEmitter:
         Callbacks run concurrently via :func:`asyncio.gather`.
         If *suppress_errors* is False (default), the first exception
         raised by any callback is re-raised after all complete.
+
+        If a *parent* emitter was set at construction, the event bubbles
+        up after local listeners run.
         """
         callbacks = self._listeners.get(event)
-        if not callbacks:
-            return
+        if callbacks:
+            # Snapshot the list so mutations during emit are safe
+            snapshot = list(callbacks)
+            results = await asyncio.gather(
+                *(cb(*args) for cb in snapshot),
+                return_exceptions=True,
+            )
 
-        # Snapshot the list so mutations during emit are safe
-        snapshot = list(callbacks)
-        results = await asyncio.gather(
-            *(cb(*args) for cb in snapshot),
-            return_exceptions=True,
-        )
+            if not suppress_errors:
+                for result in results:
+                    if isinstance(result, BaseException):
+                        raise result
 
-        if not suppress_errors:
-            for result in results:
-                if isinstance(result, BaseException):
-                    raise result
+        # Bubble to parent
+        if self._parent is not None:
+            await self._parent.emit(event, *args, suppress_errors=suppress_errors)
 
     def listener_count(self, event: EventType) -> int:
         """Return how many callbacks are registered for *event*."""

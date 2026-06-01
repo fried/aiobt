@@ -260,6 +260,83 @@ class TestEventEmitter(unittest.TestCase):
         self.assertLess(fast_idx, slow_end_idx)
 
 
+class TestEventBubbling(unittest.TestCase):
+    """Test parent-child event bubbling."""
+
+    def test_emit_bubbles_to_parent(self) -> None:
+        results: list[str] = []
+
+        async def run() -> None:
+            parent = EventEmitter()
+            child = EventEmitter(parent=parent)
+
+            async def parent_cb(msg: str) -> None:
+                results.append(f"parent:{msg}")
+
+            async def child_cb(msg: str) -> None:
+                results.append(f"child:{msg}")
+
+            parent.on(TorrentEvent.COMPLETED, parent_cb)
+            child.on(TorrentEvent.COMPLETED, child_cb)
+            await child.emit(TorrentEvent.COMPLETED, "done")
+
+        asyncio.run(run())
+        self.assertIn("child:done", results)
+        self.assertIn("parent:done", results)
+
+    def test_parent_only_listener(self) -> None:
+        results: list[str] = []
+
+        async def run() -> None:
+            parent = EventEmitter()
+            child = EventEmitter(parent=parent)
+
+            async def parent_cb(msg: str) -> None:
+                results.append(msg)
+
+            parent.on(TorrentEvent.COMPLETED, parent_cb)
+            # No child listener — should still bubble
+            await child.emit(TorrentEvent.COMPLETED, "bubbled")
+
+        asyncio.run(run())
+        self.assertEqual(results, ["bubbled"])
+
+    def test_no_parent_no_bubble(self) -> None:
+        results: list[str] = []
+
+        async def run() -> None:
+            child = EventEmitter()
+
+            async def cb(msg: str) -> None:
+                results.append(msg)
+
+            child.on(TorrentEvent.COMPLETED, cb)
+            await child.emit(TorrentEvent.COMPLETED, "local")
+
+        asyncio.run(run())
+        self.assertEqual(results, ["local"])
+
+    def test_suppress_errors_in_bubbling(self) -> None:
+        results: list[str] = []
+
+        async def run() -> None:
+            parent = EventEmitter()
+            child = EventEmitter(parent=parent)
+
+            async def bad() -> None:
+                raise ValueError("boom")
+
+            async def parent_cb() -> None:
+                results.append("parent_ok")
+
+            child.on(TorrentEvent.ERROR, bad)
+            parent.on(TorrentEvent.ERROR, parent_cb)
+            await child.emit(TorrentEvent.ERROR, suppress_errors=True)
+
+        asyncio.run(run())
+        self.assertIn("parent_ok", results)
+
+
 class TestEventEnumValues(unittest.TestCase):
     """Ensure enum members have stable string values."""
 

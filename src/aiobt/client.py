@@ -344,6 +344,7 @@ class _TorrentSession:
         meta: TorrentMeta,
         storage: StorageBackend,
         config: ClientConfig,
+        parent_events: EventEmitter | None = None,
     ) -> None:
         self.meta = meta
         self.storage = storage
@@ -357,7 +358,7 @@ class _TorrentSession:
         self.task: asyncio.Task[None] | None = None
         self.state: TorrentState = TorrentState.STOPPED
         self.done_event: asyncio.Event = asyncio.Event()
-        self.events: EventEmitter = EventEmitter()
+        self.events: EventEmitter = EventEmitter(parent=parent_events)
 
         # Stats counters
         self.bytes_downloaded: int = 0
@@ -466,16 +467,18 @@ class Client:
         """The client-level event emitter."""
         return self._events
 
-    def on(self, event: ClientEvent, callback: object = None) -> object:
-        """Register a callback for a client-level event.
+    def on(self, event: ClientEvent | TorrentEvent, callback: object = None) -> object:
+        """Register a callback for a client-level or torrent-level event.
 
-        Works as a method call or a decorator::
+        :class:`ClientEvent` callbacks fire for client lifecycle.
+        :class:`TorrentEvent` callbacks fire for **all** torrents —
+        events bubble up from each torrent's emitter to the client::
 
             client.on(ClientEvent.TORRENT_ADDED, my_func)
 
 
-            @client.on(ClientEvent.TORRENT_COMPLETED)
-            async def on_done(handle): ...
+            @client.on(TorrentEvent.PIECE_VERIFIED)
+            async def on_piece(handle, piece_index): ...
         """
         if callback is not None:
             return self._events.on(event, callback)
@@ -486,7 +489,9 @@ class Client:
 
         return decorator
 
-    def once(self, event: ClientEvent, callback: object = None) -> object:
+    def once(
+        self, event: ClientEvent | TorrentEvent, callback: object = None
+    ) -> object:
         """Like :meth:`on`, but fires only once."""
         if callback is not None:
             return self._events.once(event, callback)
@@ -497,7 +502,7 @@ class Client:
 
         return decorator
 
-    def off(self, event: ClientEvent, callback: object) -> None:
+    def off(self, event: ClientEvent | TorrentEvent, callback: object) -> None:
         """Remove a callback."""
         self._events.off(event, callback)
 
@@ -649,6 +654,7 @@ class Client:
             meta=meta,
             storage=self._storage,
             config=self._config,
+            parent_events=self._events,
         )
         await self._storage.open(meta.total_length, meta.info.piece_length)
         self._sessions[meta.info_hash] = session
