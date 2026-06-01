@@ -18,6 +18,7 @@ from .network import (
     dscp_to_tos,
     resolve_families,
 )
+from .create import create_torrent, optimal_piece_size, torrent_to_bytes
 from .torrent import FileEntry, TorrentInfo, TorrentMeta
 from .tracker import (
     AnnounceRequest,
@@ -39,6 +40,7 @@ __all__ = [
     "Client",
     "ClientConfig",
     "compilation_status",
+    "create_torrent",
     "CYTHON_MODULES",
     "detect_address_families",
     "DiscoveredPeer",
@@ -50,10 +52,12 @@ __all__ = [
     "LocalDiscovery",
     "LSDAnnounce",
     "NetworkConfig",
+    "optimal_piece_size",
     "parse_tracker_url",
     "resolve_families",
     "TorrentInfo",
     "TorrentMeta",
+    "torrent_to_bytes",
     "TrackerError",
     "udp_announce",
 ]

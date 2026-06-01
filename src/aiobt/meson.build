@@ -4,6 +4,7 @@ py.install_sources(
   '_compiled.py',
   '_version.py',
   'client.py',
+  'create.py',
   'discovery.py',
   'network.py',
   'peer.py',

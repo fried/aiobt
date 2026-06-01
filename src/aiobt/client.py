@@ -174,6 +174,18 @@ class Client:
         meta = parse_torrent_bytes(data)
         return await self._register(meta)
 
+    async def add_torrent(self, meta: TorrentMeta) -> TorrentMeta:
+        """Register an already-constructed :class:`TorrentMeta`.
+
+        Use this when you've built a ``TorrentMeta`` via
+        :func:`~aiobt.create.create_torrent` or received one from
+        another source, instead of reading a ``.torrent`` file from disk.
+
+        Returns *meta* unchanged (for chaining convenience).
+        """
+        self._check_running()
+        return await self._register(meta)
+
     async def download(self, info_hash: InfoHash) -> None:
         """Download a torrent to completion.
 
@@ -206,7 +218,7 @@ class Client:
                     response = await http_announce(url, request)
                     peers = list(response.peers)
                     break
-            except (TrackerError, OSError):
+            except (TrackerError, OSError):  # fmt: skip
                 continue
 
         # TODO: connect to peers, request pieces, verify, write to storage

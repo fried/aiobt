@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import hashlib
 from collections.abc import Sequence
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 
 from dataclasses import dataclass, field
 
@@ -152,6 +152,18 @@ class TorrentMeta:
                         urls.append(url)
                         seen.add(url)
         return urls
+
+    def to_bytes(self) -> bytes:
+        """Serialize this torrent to bencoded ``.torrent`` format."""
+        from .create import torrent_to_bytes
+
+        return torrent_to_bytes(self)
+
+    def write(self, path: str | Path) -> None:
+        """Write this torrent to a ``.torrent`` file on disk."""
+        from pathlib import Path as _Path
+
+        _Path(path).write_bytes(self.to_bytes())
 
 
 # ---------------------------------------------------------------------------
