@@ -60,7 +60,9 @@ class DiskStorage:
         self._total_length = total_length
         self._piece_length = piece_length
 
-    async def prepare_files(self, files: tuple[FileEntry, ...] | None, name: str) -> None:
+    async def prepare_files(
+        self, files: tuple[FileEntry, ...] | None, name: str
+    ) -> None:
         """Pre-allocate all files and build the offset map.
 
         Must be called after :meth:`open` and before any reads/writes.
@@ -154,6 +156,5 @@ class DiskStorage:
         return [
             sl
             for sl in self._slices
-            if sl.torrent_offset < end
-            and sl.torrent_offset + sl.length > offset
+            if sl.torrent_offset < end and sl.torrent_offset + sl.length > offset
         ]

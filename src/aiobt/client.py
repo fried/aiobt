@@ -138,9 +138,7 @@ class Client:
                 session.task.cancel()
 
         # Wait for tasks to finish
-        tasks = [
-            s.task for s in self._sessions.values() if s.task is not None
-        ]
+        tasks = [s.task for s in self._sessions.values() if s.task is not None]
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
 
@@ -204,7 +202,7 @@ class Client:
                     response = await http_announce(url, request)
                     peers = list(response.peers)
                     break
-            except (TrackerError, OSError):
+            except TrackerError, OSError:
                 continue
 
         # TODO: connect to peers, request pieces, verify, write to storage
@@ -246,12 +244,8 @@ class Client:
         try:
             return self._sessions[info_hash]
         except KeyError:
-            raise KeyError(
-                f"no torrent with info hash {info_hash.hex()}"
-            ) from None
+            raise KeyError(f"no torrent with info hash {info_hash.hex()}") from None
 
     def _check_running(self) -> None:
         if not self._running:
-            raise RuntimeError(
-                "Client must be used as an async context manager"
-            )
+            raise RuntimeError("Client must be used as an async context manager")

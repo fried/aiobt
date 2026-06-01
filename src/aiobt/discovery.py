@@ -292,9 +292,7 @@ class LocalDiscovery:
         Can be called before or after entering the context manager.
         """
         if len(info_hash) != 20:
-            raise ValueError(
-                f"info_hash must be 20 bytes, got {len(info_hash)}"
-            )
+            raise ValueError(f"info_hash must be 20 bytes, got {len(info_hash)}")
         self._info_hashes.add(info_hash)
 
     def withdraw(self, info_hash: bytes) -> None:
@@ -313,9 +311,7 @@ class LocalDiscovery:
         """
         while self._running or not self._peer_queue.empty():
             try:
-                peer = await asyncio.wait_for(
-                    self._peer_queue.get(), timeout=1.0
-                )
+                peer = await asyncio.wait_for(self._peer_queue.get(), timeout=1.0)
                 yield peer
             except TimeoutError:
                 continue
@@ -335,13 +331,17 @@ class LocalDiscovery:
 
         # --- IPv4 receive socket (SO_REUSEADDR + multicast membership) ---
         recv_sock = socket.socket(
-            socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP,
+            socket.AF_INET,
+            socket.SOCK_DGRAM,
+            socket.IPPROTO_UDP,
         )
         recv_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         if hasattr(socket, "SO_REUSEPORT"):
             try:
                 recv_sock.setsockopt(
-                    socket.SOL_SOCKET, socket.SO_REUSEPORT, 1,
+                    socket.SOL_SOCKET,
+                    socket.SO_REUSEPORT,
+                    1,
                 )
             except OSError:
                 pass
@@ -355,7 +355,9 @@ class LocalDiscovery:
             socket.inet_aton("0.0.0.0"),
         )
         recv_sock.setsockopt(
-            socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq,
+            socket.IPPROTO_IP,
+            socket.IP_ADD_MEMBERSHIP,
+            mreq,
         )
         recv_sock.setblocking(False)
 
@@ -366,10 +368,14 @@ class LocalDiscovery:
 
         # --- IPv4 send socket (for outgoing announces) ---
         send_sock = socket.socket(
-            socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP,
+            socket.AF_INET,
+            socket.SOCK_DGRAM,
+            socket.IPPROTO_UDP,
         )
         send_sock.setsockopt(
-            socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 1,
+            socket.IPPROTO_IP,
+            socket.IP_MULTICAST_TTL,
+            1,
         )
         send_sock.setblocking(False)
 
@@ -384,25 +390,33 @@ class LocalDiscovery:
 
         # --- background tasks ---
         self._listen_task = asyncio.create_task(
-            self._listen_loop(), name="aiobt-lsd-listen",
+            self._listen_loop(),
+            name="aiobt-lsd-listen",
         )
         self._announce_task = asyncio.create_task(
-            self._announce_loop(), name="aiobt-lsd-announce",
+            self._announce_loop(),
+            name="aiobt-lsd-announce",
         )
 
     async def _setup_ipv6(self, loop: asyncio.AbstractEventLoop) -> None:
         """Set up IPv6 multicast receive and send sockets."""
         try:
             recv6_sock = socket.socket(
-                socket.AF_INET6, socket.SOCK_DGRAM, socket.IPPROTO_UDP,
+                socket.AF_INET6,
+                socket.SOCK_DGRAM,
+                socket.IPPROTO_UDP,
             )
             recv6_sock.setsockopt(
-                socket.SOL_SOCKET, socket.SO_REUSEADDR, 1,
+                socket.SOL_SOCKET,
+                socket.SO_REUSEADDR,
+                1,
             )
             if hasattr(socket, "SO_REUSEPORT"):
                 try:
                     recv6_sock.setsockopt(
-                        socket.SOL_SOCKET, socket.SO_REUSEPORT, 1,
+                        socket.SOL_SOCKET,
+                        socket.SO_REUSEPORT,
+                        1,
                     )
                 except OSError:
                     pass
@@ -415,7 +429,9 @@ class LocalDiscovery:
                 0,  # interface index 0 = all
             )
             recv6_sock.setsockopt(
-                socket.IPPROTO_IPV6, socket.IPV6_JOIN_GROUP, mreq6,
+                socket.IPPROTO_IPV6,
+                socket.IPV6_JOIN_GROUP,
+                mreq6,
             )
             recv6_sock.setblocking(False)
 
@@ -425,10 +441,14 @@ class LocalDiscovery:
             )
 
             send6_sock = socket.socket(
-                socket.AF_INET6, socket.SOCK_DGRAM, socket.IPPROTO_UDP,
+                socket.AF_INET6,
+                socket.SOCK_DGRAM,
+                socket.IPPROTO_UDP,
             )
             send6_sock.setsockopt(
-                socket.IPPROTO_IPV6, socket.IPV6_MULTICAST_HOPS, 1,
+                socket.IPPROTO_IPV6,
+                socket.IPV6_MULTICAST_HOPS,
+                1,
             )
             send6_sock.setblocking(False)
 
@@ -449,10 +469,7 @@ class LocalDiscovery:
             if task is not None and not task.done():
                 task.cancel()
 
-        tasks = [
-            t for t in (self._announce_task, self._listen_task)
-            if t is not None
-        ]
+        tasks = [t for t in (self._announce_task, self._listen_task) if t is not None]
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
 
@@ -492,9 +509,7 @@ class LocalDiscovery:
         hash_list = list(hashes)
 
         for batch_start in range(0, len(hash_list), _MAX_ANNOUNCE_BATCH):
-            batch = tuple(
-                hash_list[batch_start : batch_start + _MAX_ANNOUNCE_BATCH]
-            )
+            batch = tuple(hash_list[batch_start : batch_start + _MAX_ANNOUNCE_BATCH])
 
             # IPv4
             msg_v4 = format_announce(
@@ -505,7 +520,8 @@ class LocalDiscovery:
             )
             if self._send_transport is not None:
                 self._send_transport.sendto(
-                    msg_v4, (LSD_MCAST_ADDR_V4, LSD_PORT),
+                    msg_v4,
+                    (LSD_MCAST_ADDR_V4, LSD_PORT),
                 )
 
             # IPv6
@@ -517,7 +533,8 @@ class LocalDiscovery:
                     host=f"[{LSD_MCAST_ADDR_V6}]",
                 )
                 self._send6_transport.sendto(
-                    msg_v6, (LSD_MCAST_ADDR_V6, LSD_PORT),
+                    msg_v6,
+                    (LSD_MCAST_ADDR_V6, LSD_PORT),
                 )
 
     async def _listen_loop(self) -> None:
@@ -526,7 +543,8 @@ class LocalDiscovery:
             while self._running:
                 try:
                     data, source_host = await asyncio.wait_for(
-                        self._recv_queue.get(), timeout=1.0,
+                        self._recv_queue.get(),
+                        timeout=1.0,
                     )
                 except TimeoutError:
                     continue

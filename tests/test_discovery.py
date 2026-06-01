@@ -18,7 +18,6 @@ from aiobt.discovery import (
     parse_announce,
 )
 
-
 # ---------------------------------------------------------------------------
 # Cookie generation
 # ---------------------------------------------------------------------------
@@ -285,9 +284,7 @@ class TestRoundTrip(later.unittest.TestCase):
         self.assertEqual(results[0].host, "192.168.1.200")
 
     def test_multi_hash_round_trip(self) -> None:
-        hashes = tuple(
-            hashlib.sha1(f"torrent-{i}".encode()).digest() for i in range(5)
-        )
+        hashes = tuple(hashlib.sha1(f"torrent-{i}".encode()).digest() for i in range(5))
         raw = format_announce(
             listen_port=6881,
             info_hashes=hashes,

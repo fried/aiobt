@@ -17,10 +17,13 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 
 # ---------------------------------------------------------------------------
-# Public type alias — recursive via PEP 695 ``type`` statement (3.12+)
+# Public type alias — use typing.TypeAlias for Cython compatibility
+# (Cython does not yet support PEP 695 ``type`` statements)
 # ---------------------------------------------------------------------------
 
-type BencodeValue = int | bytes | list[BencodeValue] | dict[bytes, BencodeValue]
+from typing import Union
+
+BencodeValue = Union[int, bytes, "list[BencodeValue]", "dict[bytes, BencodeValue]"]
 
 # Sentinels used by the decoder
 _CHR_I = ord("i")  # 105
@@ -92,9 +95,7 @@ def _decode_any(buf: memoryview, pos: int) -> tuple[BencodeValue, int]:
         case b if b in _DIGITS:
             return _decode_bytes(buf, pos)
         case _:
-            raise DecodeError(
-                f"unexpected byte {chr(lead)!r} at position {pos}"
-            )
+            raise DecodeError(f"unexpected byte {chr(lead)!r} at position {pos}")
 
 
 def _decode_int(buf: memoryview, pos: int) -> tuple[int, int]:
@@ -159,9 +160,7 @@ def _decode_list(buf: memoryview, pos: int) -> tuple[list[BencodeValue], int]:
         items.append(value)
 
 
-def _decode_dict(
-    buf: memoryview, pos: int
-) -> tuple[dict[bytes, BencodeValue], int]:
+def _decode_dict(buf: memoryview, pos: int) -> tuple[dict[bytes, BencodeValue], int]:
     """Decode ``d<key><value>...e`` starting at *pos*.
 
     Keys must be byte strings in sorted order per the spec.
@@ -186,9 +185,7 @@ def _decode_dict(
 
         # Enforce sorted key order
         if prev_key is not None and key <= prev_key:
-            raise DecodeError(
-                f"dict keys out of order: {prev_key!r} >= {key!r}"
-            )
+            raise DecodeError(f"dict keys out of order: {prev_key!r} >= {key!r}")
         prev_key = key
 
         value, pos = _decode_any(buf, pos)
@@ -200,9 +197,7 @@ def _find_byte(buf: memoryview, byte: int, start: int) -> int:
     for i in range(start, len(buf)):
         if buf[i] == byte:
             return i
-    raise DecodeError(
-        f"expected {chr(byte)!r} not found after position {start}"
-    )
+    raise DecodeError(f"expected {chr(byte)!r} not found after position {start}")
 
 
 # ===================================================================
@@ -258,15 +253,11 @@ def _encode_list(value: Sequence[BencodeValue], parts: list[bytes]) -> None:
     parts.append(b"e")
 
 
-def _encode_dict(
-    value: Mapping[bytes, BencodeValue], parts: list[bytes]
-) -> None:
+def _encode_dict(value: Mapping[bytes, BencodeValue], parts: list[bytes]) -> None:
     parts.append(b"d")
     for key in sorted(value.keys()):
         if not isinstance(key, bytes):
-            raise EncodeError(
-                f"dict key must be bytes, got {type(key).__name__}"
-            )
+            raise EncodeError(f"dict key must be bytes, got {type(key).__name__}")
         _encode_bytes(key, parts)
         _encode_any(value[key], parts)
     parts.append(b"e")

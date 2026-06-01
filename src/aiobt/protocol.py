@@ -67,9 +67,7 @@ class Handshake:
     def from_bytes(cls, data: Buffer) -> Handshake:
         buf = memoryview(data)
         if len(buf) < HANDSHAKE_LENGTH:
-            raise ValueError(
-                f"handshake too short: {len(buf)} < {HANDSHAKE_LENGTH}"
-            )
+            raise ValueError(f"handshake too short: {len(buf)} < {HANDSHAKE_LENGTH}")
         pstrlen = buf[0]
         if pstrlen != 19:
             raise ValueError(f"unexpected pstrlen: {pstrlen}")
@@ -179,9 +177,7 @@ class Piece:
 
     def to_bytes(self) -> bytes:
         length = 9 + len(self.block)
-        header = struct.pack(
-            "!IBII", length, MSG_PIECE, self.index, self.begin
-        )
+        header = struct.pack("!IBII", length, MSG_PIECE, self.index, self.begin)
         return header + self.block
 
 

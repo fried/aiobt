@@ -110,7 +110,11 @@ def _parse_http_response(data: bytes) -> AnnounceResponse:
     # Check for tracker error
     failure = decoded.get(b"failure reason")
     if failure is not None:
-        reason = failure.decode("utf-8", errors="replace") if isinstance(failure, bytes) else str(failure)
+        reason = (
+            failure.decode("utf-8", errors="replace")
+            if isinstance(failure, bytes)
+            else str(failure)
+        )
         raise TrackerError(reason)
 
     interval_val = decoded.get(b"interval")
@@ -194,9 +198,7 @@ async def udp_announce(
     """
     # Step 1: Connect
     transaction_id = randint(0, 0xFFFFFFFF)
-    connect_payload = struct.pack(
-        "!QII", _UDP_MAGIC, _ACTION_CONNECT, transaction_id
-    )
+    connect_payload = struct.pack("!QII", _UDP_MAGIC, _ACTION_CONNECT, transaction_id)
 
     loop = asyncio.get_running_loop()
     transport, protocol = await loop.create_datagram_endpoint(
@@ -216,7 +218,9 @@ class _UDPTrackerProtocol(asyncio.DatagramProtocol):
     """Minimal UDP protocol handler for tracker communication."""
 
     def __init__(self) -> None:
-        self.response: asyncio.Future[bytes] = asyncio.get_running_loop().create_future()
+        self.response: asyncio.Future[bytes] = (
+            asyncio.get_running_loop().create_future()
+        )
 
     def datagram_received(self, data: bytes, addr: tuple[str, int]) -> None:
         if not self.response.done():

@@ -134,6 +134,7 @@ class PeerConnection:
 
         if length == 0:
             from .protocol import KeepAlive
+
             return KeepAlive()
 
         payload = await self._reader.readexactly(length)
