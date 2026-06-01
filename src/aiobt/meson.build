@@ -3,6 +3,7 @@ py.install_sources(
   '__init__.py',
   '_compiled.py',
   '_version.py',
+  'choking.py',
   'client.py',
   'create.py',
   'discovery.py',

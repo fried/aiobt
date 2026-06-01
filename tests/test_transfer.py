@@ -27,6 +27,7 @@ import later.unittest
 
 from aiobt import Client, ClientConfig, TorrentMeta, TorrentState
 from aiobt.create import create_torrent
+from aiobt.network import NetworkConfig
 from aiobt.storage import CompactStorage
 
 
@@ -73,10 +74,11 @@ class TransferTest(later.unittest.TestCase):
             await leech2_storage.open(meta.total_length, meta.info.piece_length)
             await leech2_storage.prepare(info_hash.hex())
 
-            # ── create clients (port 0 = OS-assigned) ────────────────
-            seeder_cfg = ClientConfig(listen_port=0)
-            leech1_cfg = ClientConfig(listen_port=0)
-            leech2_cfg = ClientConfig(listen_port=0)
+            # ── create clients (port 0 = OS-assigned, LSD off) ──────
+            no_lsd = NetworkConfig(lsd_enabled=False)
+            seeder_cfg = ClientConfig(listen_port=0, network=no_lsd)
+            leech1_cfg = ClientConfig(listen_port=0, network=no_lsd)
+            leech2_cfg = ClientConfig(listen_port=0, network=no_lsd)
 
             async with (
                 Client(storage=seeder_storage, config=seeder_cfg) as seeder,

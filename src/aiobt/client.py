@@ -30,7 +30,9 @@ from types import TracebackType
 
 from dataclasses import dataclass, field
 
-from .engine import _PeerStats, run_peer
+from .choking import ChokingManager
+from .discovery import LocalDiscovery
+from .engine import EndgameState, _PeerStats, run_peer
 from .events import ClientEvent, EventEmitter, TorrentEvent
 from .network import NetworkConfig
 from .peer import PeerConnection, PeerInfo, generate_peer_id
@@ -238,6 +240,7 @@ class TorrentHandle:
         if s.tracker.is_complete:
             s.state = TorrentState.SEEDING
             s.done_event.set()
+            s.choking.is_seeding = True
         else:
             s.state = TorrentState.DOWNLOADING
         await s.events.emit(
@@ -247,12 +250,29 @@ class TorrentHandle:
             s.state,
             suppress_errors=True,
         )
+        # Start choking manager
+        if s.choking_task is None or s.choking_task.done():
+            s.choking_stop = asyncio.Event()
+            s.choking_task = asyncio.create_task(
+                s.choking.run(s.choking_stop),
+                name="aiobt-choking",
+            )
 
     async def stop(self) -> None:
         """Stop downloading/seeding and send a 'stopped' announce."""
         s = self._session
         if s.state == TorrentState.STOPPED:
             return
+        # Stop choking manager
+        if s.choking_stop is not None:
+            s.choking_stop.set()
+        if s.choking_task is not None and not s.choking_task.done():
+            s.choking_task.cancel()
+            try:
+                await s.choking_task
+            except asyncio.CancelledError:
+                pass
+            s.choking_task = None
         # Cancel the download task if running
         if s.task is not None and not s.task.done():
             s.task.cancel()
@@ -362,6 +382,14 @@ class _TorrentSession:
         self.done_event: asyncio.Event = asyncio.Event()
         self.events: EventEmitter = EventEmitter(parent=parent_events)
 
+        # Choking
+        self.choking: ChokingManager = ChokingManager()
+        self.choking_task: asyncio.Task[None] | None = None
+        self.choking_stop: asyncio.Event | None = None
+
+        # Endgame
+        self.endgame: EndgameState = EndgameState()
+
         # Stats counters
         self.bytes_downloaded: int = 0
         self.bytes_uploaded: int = 0
@@ -464,6 +492,10 @@ class Client:
         self._peer_tasks: set[asyncio.Task[None]] = set()
         self._listen_port: int = 0
 
+        # LSD
+        self._lsd: LocalDiscovery | None = None
+        self._lsd_task: asyncio.Task[None] | None = None
+
     # ----- events -----------------------------------------------------------
 
     @property
@@ -529,6 +561,27 @@ class Client:
         socks = self._server.sockets
         if socks:
             self._listen_port = socks[0].getsockname()[1]
+
+        # Start Local Service Discovery if enabled
+        if self._config.network.lsd_enabled:
+            try:
+                self._lsd = LocalDiscovery(
+                    listen_port=self._listen_port,
+                    announce_interval=self._config.network.lsd_announce_interval,
+                )
+                await self._lsd.__aenter__()
+                # Announce any already-registered torrents
+                for info_hash in self._sessions:
+                    self._lsd.announce(info_hash)
+                # Consumer loop
+                self._lsd_task = asyncio.create_task(
+                    self._lsd_consumer_loop(),
+                    name="aiobt-lsd-consumer",
+                )
+            except OSError:
+                # LSD not available (e.g. container, no multicast)
+                self._lsd = None
+
         return self
 
     async def __aexit__(
@@ -539,11 +592,30 @@ class Client:
     ) -> None:
         self._running = False
 
+        # Stop LSD
+        if self._lsd_task is not None and not self._lsd_task.done():
+            self._lsd_task.cancel()
+            try:
+                await self._lsd_task
+            except asyncio.CancelledError:
+                pass
+            self._lsd_task = None
+        if self._lsd is not None:
+            await self._lsd.__aexit__(None, None, None)
+            self._lsd = None
+
         # Stop listening
         if self._server is not None:
             self._server.close()
             await self._server.wait_closed()
             self._server = None
+
+        # Cancel all choking tasks
+        for session in self._sessions.values():
+            if session.choking_stop is not None:
+                session.choking_stop.set()
+            if session.choking_task is not None and not session.choking_task.done():
+                session.choking_task.cancel()
 
         # Cancel all torrent tasks
         for session in self._sessions.values():
@@ -557,6 +629,11 @@ class Client:
 
         # Wait for tasks to finish
         tasks = [s.task for s in self._sessions.values() if s.task is not None]
+        tasks.extend(
+            s.choking_task
+            for s in self._sessions.values()
+            if s.choking_task is not None
+        )
         tasks.extend(self._peer_tasks)
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
@@ -629,6 +706,20 @@ class Client:
         if session is None:
             return
 
+        # Withdraw from LSD
+        if self._lsd is not None:
+            self._lsd.withdraw(handle.info_hash)
+
+        # Stop choking
+        if session.choking_stop is not None:
+            session.choking_stop.set()
+        if session.choking_task is not None and not session.choking_task.done():
+            session.choking_task.cancel()
+            try:
+                await session.choking_task
+            except asyncio.CancelledError:
+                pass
+
         # Stop the task
         if session.task is not None and not session.task.done():
             session.task.cancel()
@@ -650,7 +741,6 @@ class Client:
 
         if delete_data:
             await session.storage.close()
-            # TODO: delete storage files on disk
 
     def get_handle(self, info_hash: InfoHash) -> TorrentHandle | None:
         """Look up a torrent by info hash, or return *None*."""
@@ -699,12 +789,42 @@ class Client:
         await session.events.emit(
             TorrentEvent.PEER_CONNECTED, handle, addr, suppress_errors=True
         )
+        # Register with choking manager
+        rates = session.choking.register(addr, peer)
         stats = _PeerStats()
         task = asyncio.create_task(
-            self._run_peer_wrapper(session, peer, handle, stats, addr)
+            self._run_peer_wrapper(session, peer, handle, stats, addr, rates)
         )
         self._peer_tasks.add(task)
         task.add_done_callback(self._peer_tasks.discard)
+
+    # ----- LSD integration --------------------------------------------------
+
+    async def _lsd_consumer_loop(self) -> None:
+        """Consume discovered peers from LSD and connect to them."""
+        assert self._lsd is not None
+        try:
+            async for discovered in self._lsd.discovered_peers():
+                if not self._running:
+                    break
+                session = self._sessions.get(discovered.info_hash)
+                if session is None:
+                    continue
+                addr = (discovered.host, discovered.port)
+                if addr in session.peers:
+                    continue
+                # Connect in the background, tracking the task
+                task = asyncio.create_task(
+                    self.add_peer(
+                        discovered.host,
+                        discovered.port,
+                        discovered.info_hash,
+                    )
+                )
+                self._peer_tasks.add(task)
+                task.add_done_callback(self._peer_tasks.discard)
+        except asyncio.CancelledError:
+            pass
 
     # ----- internal ---------------------------------------------------------
 
@@ -727,6 +847,10 @@ class Client:
         )
         await self._storage.open(meta.total_length, meta.info.piece_length)
         self._sessions[meta.info_hash] = session
+
+        # Announce on LSD
+        if self._lsd is not None:
+            self._lsd.announce(meta.info_hash)
 
         handle = TorrentHandle(session)
         await self._events.emit(ClientEvent.TORRENT_ADDED, handle, suppress_errors=True)
@@ -776,9 +900,11 @@ class Client:
             await session.events.emit(
                 TorrentEvent.PEER_CONNECTED, handle, addr, suppress_errors=True
             )
+            # Register with choking manager
+            rates = session.choking.register(addr, peer)
             stats = _PeerStats()
             task = asyncio.create_task(
-                self._run_peer_wrapper(session, peer, handle, stats, addr)
+                self._run_peer_wrapper(session, peer, handle, stats, addr, rates)
             )
             self._peer_tasks.add(task)
             task.add_done_callback(self._peer_tasks.discard)
@@ -800,6 +926,7 @@ class Client:
         handle: TorrentHandle,
         stats: _PeerStats,
         addr: tuple[str, int],
+        rates: object | None = None,
     ) -> None:
         """Wrap run_peer to update session stats on completion."""
         try:
@@ -811,11 +938,16 @@ class Client:
                 handle=handle,
                 done_event=session.done_event,
                 stats=stats,
+                rates=rates,
+                endgame=session.endgame,
+                addr=addr,
+                choking_mgr=session.choking,
             )
         finally:
             session.bytes_downloaded += stats.bytes_downloaded
             session.bytes_uploaded += stats.bytes_uploaded
             session.peers.pop(addr, None)
+            session.choking.unregister(addr)
             await session.events.emit(
                 TorrentEvent.PEER_DISCONNECTED,
                 handle,
