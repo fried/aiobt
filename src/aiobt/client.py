@@ -17,6 +17,7 @@ from types import TracebackType
 
 import attrs
 
+from .network import AddressFamily, NetworkConfig, resolve_families
 from .peer import PeerConnection, PeerInfo, generate_peer_id
 from .piece import PieceTracker
 from .storage.base import StorageBackend
@@ -50,6 +51,9 @@ class ClientConfig:
 
     request_timeout: float = 30.0
     """Seconds to wait for a block before re-requesting."""
+
+    network: NetworkConfig = attrs.field(factory=NetworkConfig)
+    """Network configuration (address families, LSD, bind addresses)."""
 
 
 # ---------------------------------------------------------------------------
