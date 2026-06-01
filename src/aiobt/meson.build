@@ -9,19 +9,34 @@ py.install_sources(
   'events.py',
   'network.py',
   'peer.py',
-  'piece.py',
-  'protocol.py',
   'torrent.py',
   'tracker.py',
   'py.typed',
   subdir: 'aiobt',
 )
 
-# Cython extension — compiled .so from .pyx, with .py fallback
+# Cython extensions — compiled .so from .pyx, with .py fallback
+
 py.install_sources('bencode.py', subdir: 'aiobt')
 py.extension_module(
   'bencode',
   'bencode.pyx',
+  subdir: 'aiobt',
+  install: true,
+)
+
+py.install_sources('piece.py', subdir: 'aiobt')
+py.extension_module(
+  'piece',
+  'piece.pyx',
+  subdir: 'aiobt',
+  install: true,
+)
+
+py.install_sources('protocol.py', subdir: 'aiobt')
+py.extension_module(
+  'protocol',
+  'protocol.pyx',
   subdir: 'aiobt',
   install: true,
 )

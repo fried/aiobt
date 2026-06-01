@@ -55,6 +55,32 @@ jobs:
       - name: Run tests
         run: python -m unittest discover tests
 
+  test-pure-python:
+    name: Pure Python tests (no Cython)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          allow-prereleases: true
+      - name: Install without Cython compilation
+        run: |
+          pip install later
+          echo "Running from source — no .so files"
+      - name: Verify pure Python fallback
+        run: |
+          PYTHONPATH=src python -c "
+          from aiobt._compiled import compilation_status
+          status = compilation_status()
+          print(status)
+          for mod, compiled in status.items():
+              assert not compiled, f'{mod} should NOT be compiled in pure-Python mode'
+          print('[OK] All modules running pure Python')
+          "
+      - name: Run tests
+        run: PYTHONPATH=src python -m unittest discover tests
+
   cython-build:
     name: Cython compilation + tests
     runs-on: ubuntu-latest
@@ -68,14 +94,15 @@ jobs:
         run: pip install meson-python meson ninja cython>=3
       - name: Install package with Cython
         run: pip install -e ".[dev]" --no-build-isolation
-      - name: Verify compiled bencode module loaded
+      - name: Verify all compiled modules loaded
         run: |
           python -c "
           from aiobt._compiled import compilation_status
           status = compilation_status()
           print(status)
-          assert status['bencode'], 'bencode should be compiled'
-          print('✓ Cython bencode module compiled and loadable')
+          for mod, compiled in status.items():
+              assert compiled, f'{mod} should be compiled'
+          print('[OK] All Cython modules compiled and loadable')
           "
       - name: Run tests with compiled extensions
         run: python -m unittest discover tests

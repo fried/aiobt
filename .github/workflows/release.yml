@@ -59,14 +59,17 @@ jobs:
           assert wheels, "No wheel found"
           with zipfile.ZipFile(wheels[0]) as zf:
               names = zf.namelist()
-              assert any("bencode.py" in n for n in names), \
-                  f"bencode.py missing from wheel -- fallback broken. Files: {names}"
-              print(f"[OK] bencode.py present in {wheels[0]}")
-              compiled = [n for n in names if "bencode" in n and n.endswith((".so", ".pyd"))]
+              for mod in ("bencode", "piece", "protocol"):
+                  assert any(f"{mod}.py" in n for n in names), \
+                      f"{mod}.py missing from wheel -- fallback broken. Files: {names}"
+                  print(f"[OK] {mod}.py present in {wheels[0]}")
+              compiled = [n for n in names if any(
+                  m in n for m in ("bencode", "piece", "protocol")
+              ) and n.endswith((".so", ".pyd"))]
               if compiled:
-                  print(f"[OK] Compiled extension: {compiled}")
+                  print(f"[OK] Compiled extensions: {compiled}")
               else:
-                  print("[WARN] No compiled extension (pure-Python wheel)")
+                  print("[WARN] No compiled extensions (pure-Python wheel)")
       - uses: actions/upload-artifact@v4
         with:
           name: dist-wheel-${{ matrix.os }}
@@ -103,10 +106,11 @@ jobs:
           from aiobt._compiled import compilation_status
           status = compilation_status()
           print(f"Compilation status: {status}")
-          if status["bencode"]:
-              print("[OK] Running with compiled bencode")
-          else:
-              print("[WARN] Running pure Python fallback")
+          for mod, compiled in status.items():
+              if compiled:
+                  print(f"[OK] {mod} running compiled")
+              else:
+                  print(f"[WARN] {mod} running pure Python fallback")
       - name: Run tests
         run: python -m unittest discover tests
 

@@ -15,7 +15,7 @@ from __future__ import annotations
 import importlib
 
 # Every module that supports optional Cython compilation.
-CYTHON_MODULES: tuple[str, ...] = ("bencode",)
+CYTHON_MODULES: tuple[str, ...] = ("bencode", "piece", "protocol")
 
 
 def is_compiled(module_name: str = "bencode") -> bool:
