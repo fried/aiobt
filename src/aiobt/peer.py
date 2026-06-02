@@ -12,6 +12,7 @@ import struct
 
 from dataclasses import dataclass
 
+from .mse import EncryptionPolicy, MSEStream, mse_initiate
 from .protocol import (
     HANDSHAKE_LENGTH,
     Handshake,
@@ -67,6 +68,8 @@ class PeerConnection:
         The 20-byte info hash of the torrent.
     our_peer_id:
         Our 20-byte peer ID.
+    encryption:
+        Encryption policy for this connection.
     """
 
     def __init__(
@@ -74,13 +77,17 @@ class PeerConnection:
         info: PeerInfo,
         info_hash: bytes,
         our_peer_id: bytes,
+        encryption: EncryptionPolicy = EncryptionPolicy.DISABLED,
     ) -> None:
         self._info = info
         self._info_hash = info_hash
         self._our_peer_id = our_peer_id
-        self._reader: asyncio.StreamReader | None = None
-        self._writer: asyncio.StreamWriter | None = None
+        self._encryption = encryption
+        self._reader: asyncio.StreamReader | MSEStream | None = None
+        self._writer: asyncio.StreamWriter | MSEStream | None = None
+        self._raw_writer: asyncio.StreamWriter | None = None
         self._state = PeerState()
+        self._encrypted: bool = False
 
     @property
     def info(self) -> PeerInfo:
@@ -94,22 +101,63 @@ class PeerConnection:
     def is_connected(self) -> bool:
         return self._writer is not None and not self._writer.is_closing()
 
+    @property
+    def encrypted(self) -> bool:
+        """True if the connection is using RC4 encryption."""
+        return self._encrypted
+
     async def connect(self, timeout: float = 10.0) -> None:
-        """Open TCP connection and perform the handshake."""
-        self._reader, self._writer = await asyncio.wait_for(
+        """Open TCP connection and perform the handshake.
+
+        If *encryption* is PREFERRED or FORCED, an MSE/PE handshake is
+        attempted before the BT protocol handshake.  PREFERRED falls
+        back to plaintext on failure; FORCED raises on failure.
+        """
+        raw_reader, raw_writer = await asyncio.wait_for(
             asyncio.open_connection(self._info.host, self._info.port),
             timeout=timeout,
         )
+        self._raw_writer = raw_writer
+
+        if self._encryption in (EncryptionPolicy.PREFERRED, EncryptionPolicy.FORCED):
+            try:
+                result = await mse_initiate(
+                    raw_reader,
+                    raw_writer,
+                    self._info_hash,
+                    policy=self._encryption,
+                    timeout=timeout,
+                )
+                self._reader = result.stream
+                self._writer = result.stream
+                self._encrypted = result.encrypted
+            except Exception:
+                if self._encryption == EncryptionPolicy.FORCED:
+                    raw_writer.close()
+                    raise
+                # PREFERRED: fall back to plaintext
+                self._reader = raw_reader
+                self._writer = raw_writer
+        else:
+            self._reader = raw_reader
+            self._writer = raw_writer
+
         await self._send_handshake()
         await self._receive_handshake()
 
     async def disconnect(self) -> None:
         """Close the connection gracefully."""
-        if self._writer is not None:
+        # Close the raw transport (handles both encrypted and plain)
+        if self._raw_writer is not None:
+            self._raw_writer.close()
+            await self._raw_writer.wait_closed()
+            self._raw_writer = None
+        elif self._writer is not None:
+            # Injected streams (incoming) — writer IS the raw writer
             self._writer.close()
             await self._writer.wait_closed()
-            self._writer = None
-            self._reader = None
+        self._writer = None
+        self._reader = None
 
     async def send_message(self, msg: PeerMessage) -> None:
         """Send a protocol message to the peer."""

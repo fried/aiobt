@@ -35,6 +35,7 @@ from .choking import ChokingManager, PeerRates
 from .discovery import LocalDiscovery
 from .engine import EndgameState, _PeerStats, run_peer
 from .events import ClientEvent, EventCallback, EventEmitter, TorrentEvent
+from .mse import EncryptionPolicy, mse_receive
 from .network import NetworkConfig
 from .peer import PeerConnection, PeerInfo, generate_peer_id
 from .piece import PieceTracker
@@ -368,6 +369,9 @@ class ClientConfig:
 
     tracker_timeout: float = 15.0
     """Seconds to wait for a single tracker URL before trying the next."""
+
+    encryption: EncryptionPolicy = EncryptionPolicy.PREFERRED
+    """MSE/PE encryption policy for peer connections."""
 
 
 # ---------------------------------------------------------------------------
@@ -944,6 +948,7 @@ class Client:
             info=info,
             info_hash=info_hash,
             our_peer_id=self._config.peer_id,
+            encryption=self._config.encryption,
         )
         try:
             await peer.connect(timeout=self._config.request_timeout)
@@ -1037,37 +1042,135 @@ class Client:
         reader: asyncio.StreamReader,
         writer: asyncio.StreamWriter,
     ) -> None:
-        """Handle an incoming TCP connection from a peer."""
+        """Handle an incoming TCP connection from a peer.
+
+        Detects whether the remote peer is initiating an MSE/PE encrypted
+        handshake or a standard plaintext BT handshake by inspecting the
+        first byte: 0x13 (pstrlen) means plaintext, anything else means
+        MSE DH key exchange.
+        """
         try:
-            # Read handshake
-            data = await asyncio.wait_for(
-                reader.readexactly(HANDSHAKE_LENGTH), timeout=10.0
-            )
-            hs = Handshake.from_bytes(data)
+            policy = self._config.encryption
 
-            session = self._sessions.get(hs.info_hash)
-            if session is None:
-                writer.close()
-                await writer.wait_closed()
-                return
+            # Peek at first byte to detect MSE vs plaintext
+            first_byte = await asyncio.wait_for(reader.readexactly(1), timeout=10.0)
 
-            # Send our handshake back
-            our_hs = Handshake(info_hash=hs.info_hash, peer_id=self._config.peer_id)
-            writer.write(our_hs.to_bytes())
-            await writer.drain()
+            if first_byte[0] != 19 and policy != EncryptionPolicy.DISABLED:
+                # MSE handshake — prepend the first byte back for the reader
+                prefixed = asyncio.StreamReader()
+                prefixed.feed_data(first_byte)
 
-            addr_info = writer.get_extra_info("peername")
-            addr = (addr_info[0], addr_info[1]) if addr_info else ("?", 0)
+                # Forward remaining data from the real reader in background
+                async def _pipe() -> None:
+                    try:
+                        while True:
+                            chunk = await reader.read(65536)
+                            if not chunk:
+                                prefixed.feed_eof()
+                                break
+                            prefixed.feed_data(chunk)
+                    except Exception:
+                        prefixed.feed_eof()
 
-            info = PeerInfo(host=addr[0], port=addr[1], peer_id=hs.peer_id)
-            peer = PeerConnection(
-                info=info,
-                info_hash=hs.info_hash,
-                our_peer_id=self._config.peer_id,
-            )
-            # Inject the already-connected streams
-            peer._reader = reader
-            peer._writer = writer
+                pipe_task = asyncio.create_task(_pipe())
+
+                try:
+                    info_hash_lookup = {ih: ih for ih in self._sessions}
+                    result = await mse_receive(
+                        prefixed,
+                        writer,
+                        info_hash_lookup,
+                        policy=policy,
+                        timeout=10.0,
+                    )
+                except Exception:
+                    pipe_task.cancel()
+                    raise
+
+                matched_hash = result.info_hash
+                if matched_hash is None:
+                    pipe_task.cancel()
+                    writer.close()
+                    await writer.wait_closed()
+                    return
+
+                session = self._sessions.get(matched_hash)
+                if session is None:
+                    pipe_task.cancel()
+                    writer.close()
+                    await writer.wait_closed()
+                    return
+
+                # Now do the BT handshake over the MSE stream
+                hs_data = await result.stream.readexactly(HANDSHAKE_LENGTH)
+                hs = Handshake.from_bytes(hs_data)
+
+                if hs.info_hash != matched_hash:
+                    pipe_task.cancel()
+                    writer.close()
+                    await writer.wait_closed()
+                    return
+
+                our_hs = Handshake(info_hash=hs.info_hash, peer_id=self._config.peer_id)
+                result.stream.write(our_hs.to_bytes())
+                await result.stream.drain()
+
+                addr_info = writer.get_extra_info("peername")
+                addr = (addr_info[0], addr_info[1]) if addr_info else ("?", 0)
+
+                info = PeerInfo(host=addr[0], port=addr[1], peer_id=hs.peer_id)
+                peer = PeerConnection(
+                    info=info,
+                    info_hash=hs.info_hash,
+                    our_peer_id=self._config.peer_id,
+                    encryption=policy,
+                )
+                # Inject the MSE-wrapped streams
+                peer._reader = result.stream
+                peer._writer = result.stream
+                peer._raw_writer = writer
+                peer._encrypted = result.encrypted
+
+            else:
+                # Plaintext BT handshake (first byte is 0x13 or encryption disabled)
+                if policy == EncryptionPolicy.FORCED and first_byte[0] != 19:
+                    writer.close()
+                    await writer.wait_closed()
+                    return
+
+                rest = await asyncio.wait_for(
+                    reader.readexactly(HANDSHAKE_LENGTH - 1), timeout=10.0
+                )
+                hs = Handshake.from_bytes(first_byte + rest)
+
+                session = self._sessions.get(hs.info_hash)
+                if session is None:
+                    writer.close()
+                    await writer.wait_closed()
+                    return
+
+                # Reject plaintext if encryption is forced
+                if policy == EncryptionPolicy.FORCED:
+                    writer.close()
+                    await writer.wait_closed()
+                    return
+
+                our_hs = Handshake(info_hash=hs.info_hash, peer_id=self._config.peer_id)
+                writer.write(our_hs.to_bytes())
+                await writer.drain()
+
+                addr_info = writer.get_extra_info("peername")
+                addr = (addr_info[0], addr_info[1]) if addr_info else ("?", 0)
+
+                info = PeerInfo(host=addr[0], port=addr[1], peer_id=hs.peer_id)
+                peer = PeerConnection(
+                    info=info,
+                    info_hash=hs.info_hash,
+                    our_peer_id=self._config.peer_id,
+                )
+                # Inject the already-connected streams
+                peer._reader = reader
+                peer._writer = writer
 
             session.peers[addr] = peer
             handle = TorrentHandle(session)

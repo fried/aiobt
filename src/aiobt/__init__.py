@@ -12,6 +12,7 @@ from .client import Client, ClientConfig, TorrentHandle, TorrentState, TorrentSt
 from .create import create_torrent, optimal_piece_size, torrent_to_bytes
 from .discovery import DiscoveredPeer, LocalDiscovery, LSDAnnounce
 from .events import ClientEvent, EventEmitter, TorrentEvent
+from .mse import EncryptedStream, EncryptionPolicy, MSEHandshakeResult, PlaintextStream
 from .resume import ResumeData, load_resume, resume_path, save_resume
 from .network import (
     AddressFamily,
@@ -50,12 +51,15 @@ __all__ = [
     "DiscoveredPeer",
     "DSCPValue",
     "dscp_to_tos",
+    "EncryptedStream",
+    "EncryptionPolicy",
     "EventEmitter",
     "FileEntry",
     "http_announce",
     "is_compiled",
     "LocalDiscovery",
     "LSDAnnounce",
+    "MSEHandshakeResult",
     "NetworkConfig",
     "optimal_piece_size",
     "parse_tracker_url",
@@ -63,6 +67,7 @@ __all__ = [
     "ResumeData",
     "resume_path",
     "load_resume",
+    "PlaintextStream",
     "save_resume",
     "TorrentHandle",
     "TorrentInfo",

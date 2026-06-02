@@ -9,6 +9,7 @@ py.install_sources(
   'discovery.py',
   'engine.py',
   'events.py',
+  'mse.py',
   'network.py',
   'peer.py',
   'torrent.py',
