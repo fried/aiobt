@@ -206,12 +206,15 @@ class TorrentHandle:
     def stats(self) -> TorrentStats:
         """Return a frozen snapshot of current statistics."""
         s = self._session
+        # Include bytes from currently-active peer connections
+        active_down = sum(ps.bytes_downloaded for ps in s._active_peer_stats.values())
+        active_up = sum(ps.bytes_uploaded for ps in s._active_peer_stats.values())
         return TorrentStats(
             state=s.state,
             progress=s.tracker.progress,
             total_length=s.meta.total_length,
-            downloaded=s.bytes_downloaded,
-            uploaded=s.bytes_uploaded,
+            downloaded=s.bytes_downloaded + active_down,
+            uploaded=s.bytes_uploaded + active_up,
             peers_connected=len(s.peers),
             pieces_have=len(s.tracker.have),
             pieces_total=s.tracker.piece_count,
@@ -300,7 +303,7 @@ class TorrentHandle:
         )
         try:
             await self.announce(event="stopped")
-        except TrackerError, OSError:
+        except (TrackerError, OSError):
             pass  # best-effort
 
     async def wait(self) -> None:
@@ -401,6 +404,9 @@ class _TorrentSession:
         # Endgame
         self.endgame: EndgameState = EndgameState()
 
+        # Active peer stats (for real-time byte counters)
+        self._active_peer_stats: dict[tuple[str, int], _PeerStats] = {}
+
         # Resume persistence
         self._state_dir: Path | None = config.state_dir
         self._resume_checked: bool = False
@@ -444,15 +450,31 @@ class _TorrentSession:
         """Load resume data and verify pieces against storage.
 
         Sets state to ``CHECKING`` during verification.  Only runs
-        once per session.
+        once per session.  When no resume data exists, performs a full
+        piece scan against on-disk data to support seeding existing files.
         """
-        if self._state_dir is None or self._resume_checked:
+        if self._resume_checked:
             return
         self._resume_checked = True
 
-        path = resume_path(self._state_dir, self.meta.info_hash)
-        data = load_resume(path, self.meta.info_hash)
-        if data is None or not data.have:
+        have_from_resume: frozenset[int] = frozenset()
+        if self._state_dir is not None:
+            path = resume_path(self._state_dir, self.meta.info_hash)
+            data = load_resume(path, self.meta.info_hash)
+            if data is not None and data.have:
+                have_from_resume = data.have
+                if data.uploaded > self.bytes_uploaded:
+                    self.bytes_uploaded = data.uploaded
+
+        # Determine which pieces to verify: resume set or all pieces
+        # (full scan when no resume data exists enables seeding existing files)
+        pieces_to_check: set[int]
+        if have_from_resume:
+            pieces_to_check = set(have_from_resume)
+        else:
+            pieces_to_check = set(range(self.tracker.piece_count))
+
+        if not pieces_to_check:
             return
 
         old_state = self.state
@@ -465,23 +487,23 @@ class _TorrentSession:
             suppress_errors=True,
         )
 
-        for idx in sorted(data.have):
+        for idx in sorted(pieces_to_check):
             if idx >= self.tracker.piece_count:
                 continue
             spec = self.tracker.spec(idx)
             try:
                 piece_data = await self.storage.read(spec.offset, spec.length)
-                if PieceTracker.verify_piece(piece_data, spec.hash):
+                if len(piece_data) == spec.length and PieceTracker.verify_piece(
+                    piece_data, spec.hash
+                ):
                     self.tracker.mark_have(idx)
-            except OSError, ValueError:
+            except (OSError, ValueError):
                 pass  # piece unreadable or corrupt — will re-download
 
         # Update byte counters from verified pieces
         self.bytes_downloaded = sum(
             self.tracker.spec(i).length for i in self.tracker.have
         )
-        if data.uploaded > self.bytes_uploaded:
-            self.bytes_uploaded = data.uploaded
 
     # ----- announce ---------------------------------------------------------
 
@@ -520,6 +542,12 @@ class _TorrentSession:
 
             for url in list(tier):  # copy — we mutate tier on success
                 try:
+                    await self.events.emit(
+                        TorrentEvent.TRACKER_ANNOUNCE,
+                        handle,
+                        url,
+                        suppress_errors=True,
+                    )
                     response = await announce(url, request)
                     self.last_announce_time = time.time()
                     self.tracker_peer_count = len(response.peers)
@@ -752,7 +780,7 @@ class Client:
             if not t.done():
                 t.cancel()
 
-        # Wait for tasks to finish
+        # Wait for tasks to finish (with timeout to prevent hangs)
         tasks = [s.task for s in self._sessions.values() if s.task is not None]
         tasks.extend(
             s.choking_task
@@ -761,7 +789,16 @@ class Client:
         )
         tasks.extend(self._peer_tasks)
         if tasks:
-            await asyncio.gather(*tasks, return_exceptions=True)
+            try:
+                async with asyncio.timeout(5.0):
+                    await asyncio.gather(*tasks, return_exceptions=True)
+            except TimeoutError:
+                # Force-cancel tasks that didn't finish in time
+                for t in tasks:
+                    if not t.done():
+                        t.cancel()
+                # Brief grace period for cancellation to propagate
+                await asyncio.gather(*tasks, return_exceptions=True)
         self._peer_tasks.clear()
 
         # Disconnect all peers
@@ -906,7 +943,7 @@ class Client:
         )
         try:
             await peer.connect(timeout=self._config.request_timeout)
-        except OSError, asyncio.TimeoutError:
+        except (OSError, asyncio.TimeoutError):
             return  # can't connect, silently skip
 
         session.peers[addr] = peer
@@ -971,6 +1008,14 @@ class Client:
             parent_events=self._events,
         )
         await self._storage.open(meta.total_length, meta.info.piece_length)
+
+        # Prepare file layout if the storage backend supports it
+        # (DiskStorage needs this to build the file→offset slice map)
+        if hasattr(self._storage, "prepare_files"):
+            await self._storage.prepare_files(meta.info.files, meta.info.name)
+        elif hasattr(self._storage, "prepare"):
+            await self._storage.prepare(meta.info_hash.hex())
+
         self._sessions[meta.info_hash] = session
 
         # Announce on LSD
@@ -1054,6 +1099,8 @@ class Client:
         rates: PeerRates | None = None,
     ) -> None:
         """Wrap run_peer to update session stats on completion."""
+        # Register active stats for real-time counters
+        session._active_peer_stats[addr] = stats
         try:
             await run_peer(
                 peer=peer,
@@ -1069,6 +1116,7 @@ class Client:
                 choking_mgr=session.choking,
             )
         finally:
+            session._active_peer_stats.pop(addr, None)
             session.bytes_downloaded += stats.bytes_downloaded
             session.bytes_uploaded += stats.bytes_uploaded
             session.peers.pop(addr, None)

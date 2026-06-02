@@ -325,7 +325,7 @@ async def run_peer(
                 # Acknowledged — we don't queue outgoing, so nothing to cancel
                 pass
 
-    except asyncio.IncompleteReadError, ConnectionError, OSError:
+    except (asyncio.IncompleteReadError, ConnectionError, OSError):
         # Peer disconnected
         pass
     finally:
@@ -435,6 +435,6 @@ async def _broadcast_endgame_cancel(
             if peer is not None and peer.is_connected:
                 try:
                     await peer.send_message(cancel_msg)
-                except ConnectionError, OSError:
+                except (ConnectionError, OSError):
                     pass
         offset += block_len

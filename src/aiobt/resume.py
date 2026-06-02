@@ -116,7 +116,7 @@ def load_resume(path: Path, info_hash: bytes) -> ResumeData | None:
     """
     try:
         raw = decode(path.read_bytes())
-    except FileNotFoundError, DecodeError, OSError:
+    except (FileNotFoundError, DecodeError, OSError):
         return None
 
     if not isinstance(raw, dict):

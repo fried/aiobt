@@ -61,6 +61,9 @@ class TorrentEvent(enum.Enum):
     PEER_DISCONNECTED = "peer_disconnected"
     """A peer disconnected.  ``callback(handle, peer_addr)``"""
 
+    TRACKER_ANNOUNCE = "tracker_announce"
+    """A tracker announce is starting.  ``callback(handle, tracker_url)``"""
+
     TRACKER_RESPONSE = "tracker_response"
     """A tracker announce succeeded.  ``callback(handle, response)``"""
 

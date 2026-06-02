@@ -210,13 +210,13 @@ class ChokingManager:
                 rates.am_choking = False
                 try:
                     await rates.peer.send_message(Unchoke())
-                except ConnectionError, OSError:
+                except (ConnectionError, OSError):
                     pass
             elif not should_unchoke and not rates.am_choking:
                 rates.am_choking = True
                 try:
                     await rates.peer.send_message(Choke())
-                except ConnectionError, OSError:
+                except (ConnectionError, OSError):
                     pass
 
         # Reset interval counters
