@@ -366,6 +366,9 @@ class ClientConfig:
     state_dir: Path | None = None
     """Directory for resume data.  ``None`` disables resume persistence."""
 
+    tracker_timeout: float = 15.0
+    """Seconds to wait for a single tracker URL before trying the next."""
+
 
 # ---------------------------------------------------------------------------
 # Internal per-torrent state
@@ -548,7 +551,8 @@ class _TorrentSession:
                         url,
                         suppress_errors=True,
                     )
-                    response = await announce(url, request)
+                    async with asyncio.timeout(self.config.tracker_timeout):
+                        response = await announce(url, request)
                     self.last_announce_time = time.time()
                     self.tracker_peer_count = len(response.peers)
                     # BEP 12: promote successful URL to front of tier
