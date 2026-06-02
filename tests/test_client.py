@@ -463,10 +463,14 @@ class TestClientTorrentEventBubbling(unittest.TestCase):
                     await handle.start()
 
             asyncio.run(run())
-            self.assertEqual(len(results), 1)
+            # check_resume emits STOPPED→CHECKING, then start emits CHECKING→DOWNLOADING
+            self.assertEqual(len(results), 2)
             self.assertEqual(results[0][0], meta.info.name)
             self.assertEqual(results[0][1], TorrentState.STOPPED)
-            self.assertEqual(results[0][2], TorrentState.DOWNLOADING)
+            self.assertEqual(results[0][2], TorrentState.CHECKING)
+            self.assertEqual(results[1][0], meta.info.name)
+            self.assertEqual(results[1][1], TorrentState.CHECKING)
+            self.assertEqual(results[1][2], TorrentState.DOWNLOADING)
         finally:
             path.unlink()
 
@@ -494,7 +498,8 @@ class TestClientTorrentEventBubbling(unittest.TestCase):
                     await h2.start()
 
             asyncio.run(run())
-            self.assertEqual(len(names), 2)
+            # 2 state changes per torrent: STOPPED→CHECKING and CHECKING→DOWNLOADING
+            self.assertEqual(len(names), 4)
             self.assertIn(meta1.info.name, names)
             self.assertIn(meta2.info.name, names)
         finally:

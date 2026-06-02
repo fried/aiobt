@@ -303,7 +303,7 @@ class TorrentHandle:
         )
         try:
             await self.announce(event="stopped")
-        except (TrackerError, OSError):
+        except TrackerError, OSError:
             pass  # best-effort
 
     async def wait(self) -> None:
@@ -500,7 +500,7 @@ class _TorrentSession:
                     piece_data, spec.hash
                 ):
                     self.tracker.mark_have(idx)
-            except (OSError, ValueError):
+            except OSError, ValueError:
                 pass  # piece unreadable or corrupt — will re-download
 
         # Update byte counters from verified pieces
@@ -947,7 +947,7 @@ class Client:
         )
         try:
             await peer.connect(timeout=self._config.request_timeout)
-        except (OSError, asyncio.TimeoutError):
+        except OSError, asyncio.TimeoutError:
             return  # can't connect, silently skip
 
         session.peers[addr] = peer
@@ -1119,6 +1119,8 @@ class Client:
                 addr=addr,
                 choking_mgr=session.choking,
             )
+        except OSError:
+            pass  # peer disconnected (BrokenPipe, ConnectionReset, etc.)
         finally:
             session._active_peer_stats.pop(addr, None)
             session.bytes_downloaded += stats.bytes_downloaded
