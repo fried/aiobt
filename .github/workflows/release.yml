@@ -13,8 +13,8 @@ jobs:
     name: Ruff lint + format check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.14"
           allow-prereleases: true
@@ -26,8 +26,8 @@ jobs:
     name: Pyrefly type check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.14"
           allow-prereleases: true
@@ -39,14 +39,14 @@ jobs:
     needs: [lint, typecheck]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.14"
           allow-prereleases: true
       - run: pip install build meson-python meson ninja "cython>=3"
       - run: python -m build --sdist
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: dist-sdist
           path: dist/*.tar.gz
@@ -61,8 +61,8 @@ jobs:
           - os: ubuntu-latest
           - os: macos-14       # Apple Silicon
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.14"
           allow-prereleases: true
@@ -96,7 +96,7 @@ jobs:
                   print(f"[OK] Compiled extensions: {compiled}")
               else:
                   print("[WARN] No compiled extensions (pure-Python wheel)")
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: dist-wheel-${{ matrix.os }}
           path: dist/*.whl
@@ -111,12 +111,12 @@ jobs:
           - os: ubuntu-latest
           - os: macos-14
     steps:
-      - uses: actions/checkout@v4  # for tests/
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6  # for tests/
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.14"
           allow-prereleases: true
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: dist-wheel-${{ matrix.os }}
           path: dist/
@@ -149,7 +149,7 @@ jobs:
     permissions:
       id-token: write  # trusted publishing via OIDC
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           pattern: dist-*
           path: dist/
