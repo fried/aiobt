@@ -25,6 +25,7 @@ from __future__ import annotations
 import asyncio
 import enum
 import random
+import sys
 import time
 from pathlib import Path
 from types import TracebackType
@@ -728,6 +729,13 @@ class Client:
             self._server.close()
             await self._server.wait_closed()
             self._server = None
+            # On Windows, IocpProactor.accept() creates internal tasks
+            # via ensure_future() that are cancelled when the server
+            # closes but never awaited.  Yield to the event loop so
+            # cancelled accept tasks can finalize and avoid
+            # "Task was destroyed but never awaited!" warnings.
+            if sys.platform == "win32":
+                await asyncio.sleep(0)
 
         # Cancel all choking tasks
         for session in self._sessions.values():

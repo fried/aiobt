@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import socket
+import sys
 import unittest
 from dataclasses import FrozenInstanceError
 
@@ -211,6 +212,7 @@ class TestApplyDscp(unittest.TestCase):
         finally:
             sock.close()
 
+    @unittest.skipIf(sys.platform == "win32", "IPV6_TCLASS unsupported on Windows")
     def test_set_cs1_ipv6(self) -> None:
         """CS1 should set TCLASS on an IPv6 socket."""
         try:
