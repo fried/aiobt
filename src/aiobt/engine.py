@@ -20,11 +20,12 @@ Features:
 from __future__ import annotations
 
 import asyncio
+from typing import TYPE_CHECKING
 
 from .choking import ChokingManager, PeerRates
 from .events import TorrentEvent
 from .peer import BLOCK_SIZE, PeerConnection
-from .piece import PieceTracker
+from .piece import PieceSpec, PieceTracker
 from .protocol import (
     Bitfield,
     Cancel,
@@ -38,6 +39,9 @@ from .protocol import (
     Unchoke,
 )
 from .storage.base import StorageBackend
+
+if TYPE_CHECKING:
+    from .client import TorrentHandle
 
 
 def build_bitfield(tracker: PieceTracker) -> Bitfield:
@@ -127,7 +131,7 @@ async def run_peer(
     tracker: PieceTracker,
     storage: StorageBackend,
     piece_length: int,
-    handle: object,
+    handle: TorrentHandle,
     done_event: asyncio.Event,
     stats: _PeerStats,
     rates: PeerRates | None = None,
@@ -230,6 +234,7 @@ async def run_peer(
                         tracker, peer_pieces, endgame, addr
                     )
                     if current_piece is not None:
+                        assert piece_spec is not None
                         await _request_piece_blocks(peer, piece_spec)
 
             elif isinstance(msg, Request):
@@ -313,6 +318,7 @@ async def run_peer(
                                 tracker, peer_pieces, endgame, addr
                             )
                             if current_piece is not None:
+                                assert piece_spec is not None
                                 await _request_piece_blocks(peer, piece_spec)
 
             elif isinstance(msg, Cancel):
@@ -343,7 +349,7 @@ def _start_piece(
     peer_pieces: set[int],
     endgame: EndgameState | None = None,
     addr: tuple[str, int] = ("?", 0),
-) -> tuple[int | None, object, dict[int, bytes]]:
+) -> tuple[int | None, PieceSpec | None, dict[int, bytes]]:
     """Pick the next piece to download from *peer_pieces*.
 
     If normal selection returns None but pieces remain, check for
@@ -385,7 +391,7 @@ def _start_piece(
     return None, None, {}
 
 
-async def _request_piece_blocks(peer: PeerConnection, spec: object) -> None:
+async def _request_piece_blocks(peer: PeerConnection, spec: PieceSpec) -> None:
     """Send Request messages for all blocks in a piece."""
     offset = 0
     while offset < spec.length:
@@ -411,9 +417,9 @@ def _assemble_piece(blocks: dict[int, bytes], piece_length: int) -> bytes:
 
 
 async def _broadcast_endgame_cancel(
-    handle: object,
+    handle: TorrentHandle,
     piece_index: int,
-    piece_spec: object,
+    piece_spec: PieceSpec,
     cancel_addrs: set[tuple[str, int]],
 ) -> None:
     """Send Cancel for all blocks of *piece_index* to peers in *cancel_addrs*."""

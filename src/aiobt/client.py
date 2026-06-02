@@ -32,10 +32,10 @@ from types import TracebackType
 
 from dataclasses import dataclass, field
 
-from .choking import ChokingManager
+from .choking import ChokingManager, PeerRates
 from .discovery import LocalDiscovery
 from .engine import EndgameState, _PeerStats, run_peer
-from .events import ClientEvent, EventEmitter, TorrentEvent
+from .events import ClientEvent, EventCallback, EventEmitter, TorrentEvent
 from .network import NetworkConfig
 from .peer import PeerConnection, PeerInfo, generate_peer_id
 from .piece import PieceTracker
@@ -157,7 +157,9 @@ class TorrentHandle:
         """The per-torrent event emitter."""
         return self._session.events
 
-    def on(self, event: TorrentEvent, callback: object = None) -> object:
+    def on(
+        self, event: TorrentEvent, callback: EventCallback | None = None
+    ) -> EventCallback:
         """Register a callback for a per-torrent event.
 
         Works as a decorator too::
@@ -169,24 +171,26 @@ class TorrentHandle:
             return self._session.events.on(event, callback)
 
         # Decorator form: handle.on(event) returns a registrar
-        def decorator(fn: object) -> object:
+        def decorator(fn: EventCallback) -> EventCallback:
             self._session.events.on(event, fn)
             return fn
 
-        return decorator
+        return decorator  # type: ignore[return-value]
 
-    def once(self, event: TorrentEvent, callback: object = None) -> object:
+    def once(
+        self, event: TorrentEvent, callback: EventCallback | None = None
+    ) -> EventCallback:
         """Like :meth:`on`, but fires only once."""
         if callback is not None:
             return self._session.events.once(event, callback)
 
-        def decorator(fn: object) -> object:
+        def decorator(fn: EventCallback) -> EventCallback:
             self._session.events.once(event, fn)
             return fn
 
-        return decorator
+        return decorator  # type: ignore[return-value]
 
-    def off(self, event: TorrentEvent, callback: object) -> None:
+    def off(self, event: TorrentEvent, callback: EventCallback) -> None:
         """Remove a callback."""
         self._session.events.off(event, callback)
 
@@ -623,7 +627,9 @@ class Client:
         """The client-level event emitter."""
         return self._events
 
-    def on(self, event: ClientEvent | TorrentEvent, callback: object = None) -> object:
+    def on(
+        self, event: ClientEvent | TorrentEvent, callback: EventCallback | None = None
+    ) -> EventCallback:
         """Register a callback for a client-level or torrent-level event.
 
         :class:`ClientEvent` callbacks fire for client lifecycle.
@@ -639,26 +645,26 @@ class Client:
         if callback is not None:
             return self._events.on(event, callback)
 
-        def decorator(fn: object) -> object:
+        def decorator(fn: EventCallback) -> EventCallback:
             self._events.on(event, fn)
             return fn
 
-        return decorator
+        return decorator  # type: ignore[return-value]
 
     def once(
-        self, event: ClientEvent | TorrentEvent, callback: object = None
-    ) -> object:
+        self, event: ClientEvent | TorrentEvent, callback: EventCallback | None = None
+    ) -> EventCallback:
         """Like :meth:`on`, but fires only once."""
         if callback is not None:
             return self._events.once(event, callback)
 
-        def decorator(fn: object) -> object:
+        def decorator(fn: EventCallback) -> EventCallback:
             self._events.once(event, fn)
             return fn
 
-        return decorator
+        return decorator  # type: ignore[return-value]
 
-    def off(self, event: ClientEvent | TorrentEvent, callback: object) -> None:
+    def off(self, event: ClientEvent | TorrentEvent, callback: EventCallback) -> None:
         """Remove a callback."""
         self._events.off(event, callback)
 
@@ -1053,7 +1059,7 @@ class Client:
         handle: TorrentHandle,
         stats: _PeerStats,
         addr: tuple[str, int],
-        rates: object | None = None,
+        rates: PeerRates | None = None,
     ) -> None:
         """Wrap run_peer to update session stats on completion."""
         try:

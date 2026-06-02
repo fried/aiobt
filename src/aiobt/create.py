@@ -18,7 +18,7 @@ from pathlib import Path
 
 from dataclasses import dataclass
 
-from .bencode import encode
+from .bencode import BencodeValue, encode
 from .torrent import FileEntry, TorrentInfo, TorrentMeta
 
 # ---------------------------------------------------------------------------
@@ -337,9 +337,9 @@ def create_torrent(
 # ---------------------------------------------------------------------------
 
 
-def _info_to_bencode(info: TorrentInfo) -> dict[bytes, object]:
+def _info_to_bencode(info: TorrentInfo) -> dict[bytes, BencodeValue]:
     """Convert a TorrentInfo to a bencode-ready dict."""
-    d: dict[bytes, object] = {
+    d: dict[bytes, BencodeValue] = {
         b"name": info.name.encode("utf-8"),
         b"piece length": info.piece_length,
         b"pieces": info.pieces_raw,
@@ -349,7 +349,7 @@ def _info_to_bencode(info: TorrentInfo) -> dict[bytes, object]:
         d[b"length"] = info.length
 
     if info.files is not None:
-        file_list: list[dict[bytes, object]] = []
+        file_list: list[BencodeValue] = []
         for f in info.files:
             file_list.append(
                 {
@@ -367,7 +367,7 @@ def _info_to_bencode(info: TorrentInfo) -> dict[bytes, object]:
 
 def torrent_to_bytes(meta: TorrentMeta) -> bytes:
     """Serialize a TorrentMeta to bencoded .torrent bytes."""
-    top: dict[bytes, object] = {
+    top: dict[bytes, BencodeValue] = {
         b"info": _info_to_bencode(meta.info),
     }
 
@@ -375,7 +375,7 @@ def torrent_to_bytes(meta: TorrentMeta) -> bytes:
         top[b"announce"] = meta.announce.encode("utf-8")
 
     if meta.announce_list is not None:
-        al: list[list[bytes]] = []
+        al: list[BencodeValue] = []
         for tier in meta.announce_list:
             al.append([url.encode("utf-8") for url in tier])
         top[b"announce-list"] = al
@@ -389,4 +389,4 @@ def torrent_to_bytes(meta: TorrentMeta) -> bytes:
     if meta.created_by is not None:
         top[b"created by"] = meta.created_by.encode("utf-8")
 
-    return encode(top)  # type: ignore[arg-type]
+    return encode(top)
