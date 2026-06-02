@@ -37,11 +37,15 @@ jobs:
       - run: pyrefly check src/
 
   test:
-    name: Tests with Cython (Python ${{ matrix.python-version }})
-    runs-on: ubuntu-latest
+    name: Tests with Cython (${{ matrix.os }}, Python ${{ matrix.python-version }})
+    runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        python-version: ["3.14"]
+        include:
+          - os: ubuntu-latest
+            python-version: "3.14"
+          - os: macos-14
+            python-version: "3.14"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -67,7 +71,10 @@ jobs:
 
   test-pure-python:
     name: Tests without Cython (pure Python fallback)
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-14]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -77,6 +84,7 @@ jobs:
       - name: Install runtime deps only
         run: pip install later
       - name: Verify pure Python fallback
+        shell: bash
         run: |
           PYTHONPATH=src python -c "
           from aiobt._compiled import compilation_status
@@ -87,4 +95,5 @@ jobs:
           print('[OK] All modules running pure Python')
           "
       - name: Run tests
+        shell: bash
         run: PYTHONPATH=src python -m unittest discover tests

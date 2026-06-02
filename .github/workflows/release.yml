@@ -60,7 +60,6 @@ jobs:
         include:
           - os: ubuntu-latest
           - os: macos-14       # Apple Silicon
-          - os: windows-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -111,7 +110,6 @@ jobs:
         include:
           - os: ubuntu-latest
           - os: macos-14
-          - os: windows-latest
     steps:
       - uses: actions/checkout@v4  # for tests/
       - uses: actions/setup-python@v5
