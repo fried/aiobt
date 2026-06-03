@@ -66,8 +66,22 @@ jobs:
               assert compiled, f'{mod} should be compiled'
           print('[OK] All Cython modules compiled and loadable')
           "
+      - name: Run tests with coverage
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          pip install coverage
+          coverage run -m unittest discover tests
+          coverage xml
+          coverage report --show-missing
       - name: Run tests
+        if: matrix.os != 'ubuntu-latest'
         run: python -m unittest discover tests
+      - name: Upload coverage to Codecov
+        if: matrix.os == 'ubuntu-latest'
+        uses: codecov/codecov-action@v5
+        with:
+          files: coverage.xml
+          fail_ci_if_error: false
 
   test-pure-python:
     name: Tests without Cython (pure Python fallback)

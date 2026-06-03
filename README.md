@@ -1,6 +1,7 @@
 # aiobt
 
 [![CI](https://github.com/fried/aiobt/actions/workflows/ci.yml/badge.svg)](https://github.com/fried/aiobt/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/fried/aiobt/branch/main/graph/badge.svg)](https://codecov.io/gh/fried/aiobt)
 [![PyPI](https://img.shields.io/pypi/v/aiobt)](https://pypi.org/project/aiobt/)
 [![Python](https://img.shields.io/pypi/pyversions/aiobt)](https://pypi.org/project/aiobt/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/fried/aiobt/blob/main/LICENSE)

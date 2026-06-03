@@ -49,3 +49,14 @@ docstring-code-format = true
 [tool.pyrefly]
 python_version = "3.14"
 source = ["src"]
+
+[tool.coverage.run]
+source = ["aiobt"]
+
+[tool.coverage.report]
+show_missing = true
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "if __name__ == .__main__.",
+]
