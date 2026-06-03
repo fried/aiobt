@@ -4,7 +4,7 @@
 [![PyPI](https://img.shields.io/pypi/v/aiobt)](https://pypi.org/project/aiobt/)
 [![Python](https://img.shields.io/pypi/pyversions/aiobt)](https://pypi.org/project/aiobt/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/fried/aiobt/blob/main/LICENSE)
-[![Code style: Ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://docs.astral.sh/ruff/)
+[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
 Pure Python asyncio BitTorrent client library.
 
