@@ -19,7 +19,11 @@ from aiobt.storage import DiskStorage
 
 
 async def main() -> None:
-    torrent_file = sys.argv[1] if len(sys.argv) > 1 else "/home/vex/FreeBSD-15.0-RELEASE-amd64-bootonly.iso.torrent"
+    torrent_file = (
+        sys.argv[1]
+        if len(sys.argv) > 1
+        else "/home/vex/FreeBSD-15.0-RELEASE-amd64-bootonly.iso.torrent"
+    )
     download_dir = sys.argv[2] if len(sys.argv) > 2 else "/tmp/aiobt-freebsd-test"
     timeout_secs = int(sys.argv[3]) if len(sys.argv) > 3 else 120
 
@@ -58,9 +62,11 @@ async def main() -> None:
             nonlocal tracker_responses
             tracker_responses += 1
             elapsed = time.monotonic() - start_time
-            print(f"[{elapsed:6.1f}s] TRACKER_RESPONSE ← {len(response.peers)} peers "
-                  f"(seeders={response.complete}, leechers={response.incomplete}, "
-                  f"interval={response.interval}s)")
+            print(
+                f"[{elapsed:6.1f}s] TRACKER_RESPONSE ← {len(response.peers)} peers "
+                f"(seeders={response.complete}, leechers={response.incomplete}, "
+                f"interval={response.interval}s)"
+            )
             # Collect peers for manual connection
             for peer_addr in response.peers:
                 if peer_addr not in all_discovered_peers:
@@ -78,8 +84,10 @@ async def main() -> None:
         async def on_peer(handle, addr):
             peers_seen.add(addr)
             elapsed = time.monotonic() - start_time
-            print(f"[{elapsed:6.1f}s] PEER_CONNECTED {addr[0]}:{addr[1]} "
-                  f"(total: {len(peers_seen)})")
+            print(
+                f"[{elapsed:6.1f}s] PEER_CONNECTED {addr[0]}:{addr[1]} "
+                f"(total: {len(peers_seen)})"
+            )
 
         @client.on(TorrentEvent.PEER_DISCONNECTED)
         async def on_peer_disc(handle, addr):
@@ -93,11 +101,13 @@ async def main() -> None:
             elapsed = time.monotonic() - start_time
             stats = handle.stats()
             if pieces_verified <= 5 or pieces_verified % 20 == 0:
-                print(f"[{elapsed:6.1f}s] PIECE #{piece_index} verified "
-                      f"({pieces_verified}/{stats.pieces_total}, "
-                      f"{stats.progress:.1%}, "
-                      f"dl={stats.downloaded / 1024 / 1024:.1f} MiB, "
-                      f"up={stats.uploaded / 1024 / 1024:.1f} MiB)")
+                print(
+                    f"[{elapsed:6.1f}s] PIECE #{piece_index} verified "
+                    f"({pieces_verified}/{stats.pieces_total}, "
+                    f"{stats.progress:.1%}, "
+                    f"dl={stats.downloaded / 1024 / 1024:.1f} MiB, "
+                    f"up={stats.uploaded / 1024 / 1024:.1f} MiB)"
+                )
 
         @client.on(TorrentEvent.STATE_CHANGED)
         async def on_state(handle, old, new):
@@ -146,9 +156,7 @@ async def main() -> None:
             print(f"\nConnecting to {len(all_discovered_peers)} discovered peers...")
             connect_tasks = []
             for host, port in all_discovered_peers[:30]:  # cap at 30
-                connect_tasks.append(
-                    client.add_peer(host, port, handle.info_hash)
-                )
+                connect_tasks.append(client.add_peer(host, port, handle.info_hash))
             if connect_tasks:
                 await asyncio.gather(*connect_tasks, return_exceptions=True)
             print(f"Connected: {len(peers_seen)} peers")
@@ -161,12 +169,14 @@ async def main() -> None:
                     await asyncio.sleep(5)
                     elapsed = time.monotonic() - start_time
                     stats = handle.stats()
-                    print(f"[{elapsed:6.1f}s] {stats.state.value} | "
-                          f"{stats.pieces_have}/{stats.pieces_total} | "
-                          f"{stats.progress:.1%} | "
-                          f"dl={stats.downloaded / 1024 / 1024:.1f} MiB | "
-                          f"up={stats.uploaded / 1024 / 1024:.1f} MiB | "
-                          f"peers={stats.peers_connected}")
+                    print(
+                        f"[{elapsed:6.1f}s] {stats.state.value} | "
+                        f"{stats.pieces_have}/{stats.pieces_total} | "
+                        f"{stats.progress:.1%} | "
+                        f"dl={stats.downloaded / 1024 / 1024:.1f} MiB | "
+                        f"up={stats.uploaded / 1024 / 1024:.1f} MiB | "
+                        f"peers={stats.peers_connected}"
+                    )
         except TimeoutError:
             elapsed = time.monotonic() - start_time
             print(f"\n[{elapsed:.1f}s] Timeout — stopping")
@@ -175,9 +185,9 @@ async def main() -> None:
     elapsed = time.monotonic() - start_time
     print(f"\n[{elapsed:.1f}s] ✅ Client shut down cleanly")
 
-    print(f"\n{'='*50}")
+    print(f"\n{'=' * 50}")
     print(f"RESULTS")
-    print(f"{'='*50}")
+    print(f"{'=' * 50}")
     print(f"Duration: {elapsed:.1f}s")
     print(f"Peers discovered: {len(all_discovered_peers)}")
     print(f"Peers connected: {len(peers_seen)}")
@@ -189,10 +199,14 @@ async def main() -> None:
     print(f"Bug #1 (auto prepare_files): ✅ (torrent loaded without manual call)")
     print(f"Bug #2 (full piece scan):    ✅ (no resume file existed)")
     print(f"Bug #3 (clean shutdown):     ✅ (reached this point)")
-    print(f"Bug #4 (live byte counters): {'✅' if pieces_verified > 0 else 'N/A (no data transferred)'}")
+    print(
+        f"Bug #4 (live byte counters): {'✅' if pieces_verified > 0 else 'N/A (no data transferred)'}"
+    )
     print(f"TRACKER_ANNOUNCE events:     {'✅' if tracker_announces > 0 else '❌'}")
     print(f"TRACKER_RESPONSE events:     {'✅' if tracker_responses > 0 else '❌'}")
-    print(f"TRACKER_FAILED events:       {'✅' if tracker_failures > 0 else '(none — all trackers succeeded)'}")
+    print(
+        f"TRACKER_FAILED events:       {'✅' if tracker_failures > 0 else '(none — all trackers succeeded)'}"
+    )
 
 
 if __name__ == "__main__":

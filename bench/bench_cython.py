@@ -158,41 +158,54 @@ _PIECE_OBJ = Piece(index=42, begin=0, block=_BLOCK)
 def _bench_parse_keepalive():
     parse_message(_KEEPALIVE_DATA)
 
+
 def _bench_parse_choke():
     parse_message(_CHOKE_DATA)
+
 
 def _bench_parse_have():
     parse_message(_HAVE_DATA)
 
+
 def _bench_parse_request():
     parse_message(_REQUEST_DATA)
+
 
 def _bench_parse_piece():
     parse_message(_PIECE_DATA)
 
+
 def _bench_parse_bitfield():
     parse_message(_BITFIELD_DATA)
+
 
 def _bench_handshake_to_bytes():
     _HANDSHAKE_OBJ.to_bytes()
 
+
 def _bench_handshake_from_bytes():
     Handshake.from_bytes(_HANDSHAKE_BYTES)
+
 
 def _bench_keepalive_to_bytes():
     KeepAlive().to_bytes()
 
+
 def _bench_choke_to_bytes():
     Choke().to_bytes()
+
 
 def _bench_have_to_bytes():
     _HAVE_OBJ.to_bytes()
 
+
 def _bench_request_to_bytes():
     _REQUEST_OBJ.to_bytes()
 
+
 def _bench_piece_to_bytes():
     _PIECE_OBJ.to_bytes()
+
 
 def _bench_bitfield_has_piece():
     # Check 100 piece indices
@@ -287,71 +300,100 @@ def _bench_mark_have():
 # Runner
 # ---------------------------------------------------------------------------
 
+
 def main():
     status = compilation_status()
     mode = "CYTHON" if any(status.values()) else "PURE PYTHON"
 
-    print(f"\n{'='*72}")
+    print(f"\n{'=' * 72}")
     print(f"  aiobt benchmark — {mode}")
-    print(f"{'='*72}")
+    print(f"{'=' * 72}")
     print(f"  Module status: {status}")
-    print(f"{'='*72}\n")
+    print(f"{'=' * 72}\n")
 
     groups: list[tuple[str, list[tuple[str, object, int]]]] = [
-        ("Bencode", [
-            ("encode (small dict)", _bench_bencode_encode, 200_000),
-            ("decode (small dict)", _bench_bencode_decode, 200_000),
-            ("encode (large/1500 pieces)", _bench_bencode_encode_large, 20_000),
-            ("decode (large/1500 pieces)", _bench_bencode_decode_large, 20_000),
-        ]),
-        ("Protocol — parse_message", [
-            ("parse keepalive", _bench_parse_keepalive, 500_000),
-            ("parse choke", _bench_parse_choke, 500_000),
-            ("parse have", _bench_parse_have, 500_000),
-            ("parse request", _bench_parse_request, 500_000),
-            ("parse piece (16 KiB)", _bench_parse_piece, 500_000),
-            ("parse bitfield (1500 pcs)", _bench_parse_bitfield, 500_000),
-        ]),
-        ("Protocol — to_bytes", [
-            ("keepalive.to_bytes", _bench_keepalive_to_bytes, 500_000),
-            ("choke.to_bytes", _bench_choke_to_bytes, 500_000),
-            ("have.to_bytes", _bench_have_to_bytes, 500_000),
-            ("request.to_bytes", _bench_request_to_bytes, 500_000),
-            ("piece.to_bytes (16 KiB)", _bench_piece_to_bytes, 500_000),
-        ]),
-        ("Protocol — handshake", [
-            ("handshake.to_bytes", _bench_handshake_to_bytes, 500_000),
-            ("handshake.from_bytes", _bench_handshake_from_bytes, 500_000),
-        ]),
-        ("Protocol — bitfield", [
-            ("has_piece × 100", _bench_bitfield_has_piece, 50_000),
-        ]),
-        ("Piece tracker", [
-            ("PieceTracker() init (1500 pcs)", _bench_tracker_init, 5_000),
-            ("select_piece (500 have, 50 pending)", _bench_select_piece, 50_000),
-            ("update_availability (200 pcs)", _bench_update_availability_small, 5_000),
-            ("update_availability (1000 pcs)", _bench_update_availability_large, 2_000),
-            ("verify_piece (512 KiB)", _bench_verify_piece, 20_000),
-            ("mark_have × 1500", _bench_mark_have, 2_000),
-        ]),
+        (
+            "Bencode",
+            [
+                ("encode (small dict)", _bench_bencode_encode, 200_000),
+                ("decode (small dict)", _bench_bencode_decode, 200_000),
+                ("encode (large/1500 pieces)", _bench_bencode_encode_large, 20_000),
+                ("decode (large/1500 pieces)", _bench_bencode_decode_large, 20_000),
+            ],
+        ),
+        (
+            "Protocol — parse_message",
+            [
+                ("parse keepalive", _bench_parse_keepalive, 500_000),
+                ("parse choke", _bench_parse_choke, 500_000),
+                ("parse have", _bench_parse_have, 500_000),
+                ("parse request", _bench_parse_request, 500_000),
+                ("parse piece (16 KiB)", _bench_parse_piece, 500_000),
+                ("parse bitfield (1500 pcs)", _bench_parse_bitfield, 500_000),
+            ],
+        ),
+        (
+            "Protocol — to_bytes",
+            [
+                ("keepalive.to_bytes", _bench_keepalive_to_bytes, 500_000),
+                ("choke.to_bytes", _bench_choke_to_bytes, 500_000),
+                ("have.to_bytes", _bench_have_to_bytes, 500_000),
+                ("request.to_bytes", _bench_request_to_bytes, 500_000),
+                ("piece.to_bytes (16 KiB)", _bench_piece_to_bytes, 500_000),
+            ],
+        ),
+        (
+            "Protocol — handshake",
+            [
+                ("handshake.to_bytes", _bench_handshake_to_bytes, 500_000),
+                ("handshake.from_bytes", _bench_handshake_from_bytes, 500_000),
+            ],
+        ),
+        (
+            "Protocol — bitfield",
+            [
+                ("has_piece × 100", _bench_bitfield_has_piece, 50_000),
+            ],
+        ),
+        (
+            "Piece tracker",
+            [
+                ("PieceTracker() init (1500 pcs)", _bench_tracker_init, 5_000),
+                ("select_piece (500 have, 50 pending)", _bench_select_piece, 50_000),
+                (
+                    "update_availability (200 pcs)",
+                    _bench_update_availability_small,
+                    5_000,
+                ),
+                (
+                    "update_availability (1000 pcs)",
+                    _bench_update_availability_large,
+                    2_000,
+                ),
+                ("verify_piece (512 KiB)", _bench_verify_piece, 20_000),
+                ("mark_have × 1500", _bench_mark_have, 2_000),
+            ],
+        ),
     ]
 
     all_results: list[Result] = []
 
     for group_name, tests in groups:
         print(f"  {group_name}")
-        print(f"  {'-'*50}")
+        print(f"  {'-' * 50}")
         for name, fn, n in tests:
             r = bench(name, fn, n)
             all_results.append(r)
-            print(f"    {name:40s}  {r.ops_per_sec:>12,.0f} ops/s  ({r.ns_per_op:>8,.0f} ns/op)")
+            print(
+                f"    {name:40s}  {r.ops_per_sec:>12,.0f} ops/s  ({r.ns_per_op:>8,.0f} ns/op)"
+            )
         print()
 
-    print(f"{'='*72}")
+    print(f"{'=' * 72}")
     print(f"  Total operations: {sum(r.ops for r in all_results):,}")
     print(f"  Total time:       {sum(r.elapsed for r in all_results):.2f}s")
     print(f"  Mode:             {mode}")
-    print(f"{'='*72}\n")
+    print(f"{'=' * 72}\n")
 
 
 if __name__ == "__main__":
